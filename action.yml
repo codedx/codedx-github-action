@@ -1,0 +1,27 @@
+name: 'Code Dx: Start Analysis'
+description: 'Wait a designated number of milliseconds'
+inputs:
+  serverUrl:
+    description: 'the URL for the Code Dx server (typically ends with `/codedx`)'
+    required: true
+  apiKey:
+    description: 'an API key or Personal Access Token (PAT) to use when connecting to Code Dx'
+    required: true
+  sourceAndBinariesGlob:
+    description: 'a file glob matching source and binary files (accepts multiple comma-separated globs)'
+    required: true
+  toolOutputsGlob:
+    description: 'a file glob matching output files (ie scan results) from an analysis tool (accepts multiple comma-separated globs)'  
+    required: false
+  projectId:
+    required: true
+  customCert:
+    required: false
+  failureSeverities:
+    required: false
+outputs:
+  jobId: # output will be available to future steps
+    description: 'the ID of the generated analysis job'
+runs:
+  using: 'node12'
+  main: 'dist/index.js'
