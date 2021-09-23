@@ -23,17 +23,23 @@ const JobStatus = {
 }
 
 function commaSeparated(str) {
-  return str.split(',').map(s => s.trim()).filter(s => s.length > 0)
+  return (str || '').split(',').map(s => s.trim()).filter(s => s.length > 0)
+}
+
+function areGlobsValid(globsArray) {
+  return !!globsArray && globsArray.length
 }
 
 async function buildGlobObject(globsArray) {
-  if (!globsArray || globsArray.length == 0) return null
   return glob.create(globsArray.join('\n'))
 }
 
 async function prepareInputsZip(inputsGlob, targetFile) {
   const separatedInputGlobs = commaSeparated(inputsGlob);
   core.debug("Got input file globs: " + separatedInputGlobs)
+  if (!areGlobsValid(separatedInputGlobs)) {
+    throw new Error("No globs specified for source/binary input files")
+  }
 
   const inputFilesGlob = await buildGlobObject(separatedInputGlobs);
 
@@ -55,50 +61,85 @@ async function prepareInputsZip(inputsGlob, targetFile) {
   return numWritten
 }
 
-// most @actions toolkit packages have async methods
-module.exports = async function run() {
-  const config = getConfig()
+async function attachInputsZip(inputGlobs, formData, tmpDir) {
+  const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
+  const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
+  if (numFiles == 0) {
+    throw new Error("No files were matched by the source/binary glob(s)")
+  } else {
+    core.info(`Added ${numFiles} files`)
+  }
+  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
+}
 
-  const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
+async function attachScanFiles(scanGlobs, formData) {
+  const separatedScanGlobs = commaSeparated(scanGlobs)
+  core.debug("Got scan file globs: " + separatedScanGlobs)
+  if (areGlobsValid(separatedScanGlobs)) {
+    const scanFilesGlob = await buildGlobObject(separatedScanGlobs)
+
+    core.info("Searching with globs...")
+    let numWritten = 0
+    for await (const file of scanFilesGlob.globGenerator()) {
+      core.info('- Adding ' + file)
+      const name = path.basename(file)
+      formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
+    }
+    core.info(`Found and added ${numWritten} scan files`)
+  } else {
+    core.info("(Scan files skipped as no globs were specified)")
+  }
+}
+
+async function getAndValidateClient(serverUrl, apiKey, projectId) {
+  const client = new CodeDxApiClient(serverUrl, apiKey)
   core.info("Checking connection to Code Dx...")
+
   const codedxVersion = await client.testConnection()
   core.info("Confirmed - using Code Dx " + codedxVersion)
 
   core.info("Checking API key permissions...")
-  await client.validatePermissions(config.projectId)
+  await client.validatePermissions(projectId)
 
+  return client
+}
+
+async function waitForAnalysis(client, jobId) {
+  core.info("Waiting for job to finish...")
+  let lastStatus = null
+  do {
+    await wait(1000)
+    lastStatus = await client.checkJobStatus(jobId)
+  } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
+
+  if (lastStatus == JobStatus.COMPLETED) {
+    core.info("Analysis finished! Completed with status: " + lastStatus)
+  } else {
+    throw new Error("Analysis finished with non-complete status: " + lastStatus)
+  }
+}
+
+// most @actions toolkit packages have async methods
+module.exports = async function run() {
+  const config = getConfig()
+
+  const client = await getAndValidateClient(config.serverUrl, config.apiKey, config.projectId)
   core.info("Connection to Code Dx server is OK.")
 
-  // const separatedResultsGlobs = commaSeparated(toolResultsGlob)
-  // const resultsFilesGlob = await buildGlobObject(separatedResultsGlobs)
-
-  const zipTarget = path.join(config.tmpDir, "codedx-inputfiles.zip")
-
+  const formData = new FormData()
+  
   core.info("Preparing source/binaries ZIP...")
-  const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
-  if (numFiles == 0) {
-    throw new Error("No files were matched by the source/binary glob(s)")
-  }
+  await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+
+  core.info("Adding scan files...")
+  await attachScanFiles(config.scanGlobs, formData)
 
   core.info("Uploading to Code Dx...")
-  const formData = new FormData()
-  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
-
   const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
+
   core.info("Started analysis #" + analysisId)
 
   if (config.waitForCompletion) {
-    core.info("Waiting for job to finish...")
-    let lastStatus = null
-    do {
-      await wait(1000)
-      lastStatus = await client.checkJobStatus(jobId)
-    } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
-
-    if (lastStatus == JobStatus.COMPLETED) {
-      core.info("Analysis finished! Completed with status: " + lastStatus)
-    } else {
-      throw new Error("Analysis finished with non-complete status: " + lastStatus)
-    }
+    await waitForAnalysis(client, jobId)
   }
 }
