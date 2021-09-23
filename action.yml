@@ -1,11 +1,15 @@
 name: 'Code Dx: Start Analysis'
 description: 'Wait a designated number of milliseconds'
 inputs:
+  # main config options
   serverUrl:
     description: 'the URL for the Code Dx server (typically ends with `/codedx`)'
     required: true
   apiKey:
     description: 'an API key or Personal Access Token (PAT) to use when connecting to Code Dx'
+    required: true
+  projectId:
+    description: 'the ID of a project (an integer) created in Code Dx'
     required: true
   sourceAndBinariesGlob:
     description: 'a file glob matching source and binary files (accepts multiple comma-separated globs)'
@@ -13,15 +17,12 @@ inputs:
   toolOutputsGlob:
     description: 'a file glob matching output files (ie scan results) from an analysis tool (accepts multiple comma-separated globs)'  
     required: false
-  projectId:
-    required: true
-  customCert:
+  
+  # additional settings
+  waitForCompletion:
+    description: 'whether to wait for the analysis to complete. if true, will fail the build if the analysis encountered an error.'
     required: false
-  failureSeverities:
-    required: false
-outputs:
-  jobId: # output will be available to future steps
-    description: 'the ID of the generated analysis job'
+    default: false
 runs:
   using: 'node12'
   main: 'dist/index.js'

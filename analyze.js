@@ -5,6 +5,9 @@ const archiver = require('archiver')
 const fs = require('fs')
 const FormData = require('form-data')
 const CodeDxApiClient = require('./codedx')
+const path = require('path')
+
+const getConfig = require('./config').get
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -42,61 +45,60 @@ async function prepareInputsZip(inputsGlob, targetFile) {
 
   archive.pipe(output);
 
+  let numWritten = 0
   for await (const file of inputFilesGlob.globGenerator()) {
     archive.file(file);
+    numWritten += 1
   }
 
   await archive.finalize();
+  return numWritten
 }
 
 // most @actions toolkit packages have async methods
-module.exports = async function run({
-  // common inputs
-  serverUrl, apiKey, projectId, inputGlobs, scanGlobs,
+module.exports = async function run() {
+  const config = getConfig()
 
-  // config options for testing
-  tmpDir, 
-}) {
-  const client = new CodeDxApiClient(serverUrl, apiKey)
+  const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
   core.info("Checking connection to Code Dx...")
-
-  await client.testConnection()
+  const codedxVersion = await client.testConnection()
+  core.info("Confirmed - using Code Dx " + codedxVersion)
 
   core.info("Checking API key permissions...")
-  await client.validatePermissions(projectId)
+  await client.validatePermissions(config.projectId)
 
   core.info("Connection to Code Dx server is OK.")
 
   // const separatedResultsGlobs = commaSeparated(toolResultsGlob)
   // const resultsFilesGlob = await buildGlobObject(separatedResultsGlobs)
 
-  const zipTarget = "codedx-inputfiles.zip"
+  const zipTarget = path.join(config.tmpDir, "codedx-inputfiles.zip")
 
   core.info("Preparing source/binaries ZIP...")
-  const inputFilesZip = await prepareInputsZip(inputGlobs, zipTarget)
+  const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
+  if (numFiles == 0) {
+    throw new Error("No files were matched by the source/binary glob(s)")
+  }
 
   core.info("Uploading to Code Dx...")
   const formData = new FormData()
   formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
 
-  const { analysisId, jobId } = await client.runAnalysis(projectId, formData)
+  const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
   core.info("Started analysis #" + analysisId)
 
-  core.info("Waiting for job to finish...")
-  let lastStatus = null
-  do {
-    await wait(1000)
-    lastStatus = await client.checkJobStatus(jobId)
-  } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
+  if (config.waitForCompletion) {
+    core.info("Waiting for job to finish...")
+    let lastStatus = null
+    do {
+      await wait(1000)
+      lastStatus = await client.checkJobStatus(jobId)
+    } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
 
-  core.info("Analysis finished! Completed with status: " + lastStatus)
-
-  // const ms = core.getInput('milliseconds');
-  // core.info(`Waiting ${ms} milliseconds ...`);
-
-  // core.debug((new Date()).toTimeString()); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
-  // await wait(parseInt(ms));
-  // core.info((new Date()).toTimeString());
-
-  // core.setOutput('time', new Date().toTimeString());
+    if (lastStatus == JobStatus.COMPLETED) {
+      core.info("Analysis finished! Completed with status: " + lastStatus)
+    } else {
+      throw new Error("Analysis finished with non-complete status: " + lastStatus)
+    }
+  }
 }
