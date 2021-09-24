@@ -7,7 +7,7 @@ AxiosLogger.setGlobalConfig({
 })
 
 function parseError(e) {
-    if (axios.isAxiosError(e)) {
+    if (axios.isAxiosError(e) && e.response) {
         let msg = `${e.response.statusText} (HTTP ${e.response.status})`
 
         if (e.response.data) {
@@ -94,7 +94,7 @@ class CodeDxApiClient {
         } catch (e) {
             throw parseError(e)
         }
-        return result.data
+        return response.data
     }
 
     async checkJobStatus(jobId) {
