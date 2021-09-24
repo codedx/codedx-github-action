@@ -26,13 +26,9 @@ jobs:
           path: 'webgoat'
           
       - run: |
-          mkdir scans
-          
-      - uses: AppThreat/sast-scan-action@master
-        with:
-          type: "java"
-          src: 'webgoat'
-          output: 'scans'
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F6.38.0/pmd-bin-6.38.0.zip
+          unzip pmd-bin-6.38.0.zip
+          ./pmd-bin-6.38.0/bin/run.sh pmd -d webgoat -f sarif -R rulesets/java/quickstart.xml -r pmd-sarif.json
       
       - name: Code Dx Upload
         uses: './codedx-action'
@@ -41,5 +37,5 @@ jobs:
           api-key: ${{ secrets.CDX_API_KEY }}
           project-id: ${{ secrets.CDX_PROJECT_ID }}
           source-and-binaries-glob: 'webgoat/**'
-          tool-outputs-glob: 'scans/*.sarif'
+          tool-outputs-glob: 'pmd-sarif.json'
           wait-for-completion: false
