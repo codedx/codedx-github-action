@@ -6,6 +6,24 @@ AxiosLogger.setGlobalConfig({
     headers: true
 })
 
+function parseError(e) {
+    if (axios.isAxiosError(e)) {
+        let msg = `${e.response.statusText} (HTTP ${e.response.status})`
+
+        if (e.response.data) {
+            if (e.response.data.error) {
+                msg += `: ${e.response.data.error}`
+            } else {
+                msg += `: received response ${JSON.stringify(e.response.data)}`
+            }
+        }
+
+        return new Error(msg)
+    } else {
+        return e
+    }
+}
+
 class CodeDxApiClient {
     constructor(baseUrl, apiKey) {
         this.anonymousHttp = axios.create({
@@ -67,17 +85,25 @@ class CodeDxApiClient {
     }
 
     async runAnalysis(projectId, formData) {
-        const result = await this.http.post(`/api/projects/${projectId}/analysis`, formData, {
-            headers: {
-                ...formData.getHeaders()
-            }
-        })
+        let response = null
+
+        try {
+            response = await this.http.post(`/api/projects/${projectId}/analysis`, formData, {
+                headers: formData.getHeaders()
+            })
+        } catch (e) {
+            throw parseError(e)
+        }
         return result.data
     }
 
     async checkJobStatus(jobId) {
-        const result = await this.http.get('/api/jobs/' + jobId)
-        return result.data.status
+        try {
+            const result = await this.http.get('/api/jobs/' + jobId)
+            return result.data.status
+        } catch (e) {
+            throw parseError(e)
+        }
     }
 }
 
