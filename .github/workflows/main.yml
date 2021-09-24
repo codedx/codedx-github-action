@@ -22,7 +22,7 @@ jobs:
           
       - uses: actions/checkout@v2
         with:
-          repository: 'https://github.com/WebGoat/WebGoat.git'
+          repository: 'WebGoat/WebGoat'
           path: 'webgoat'
           
       - uses: AppThreat/sast-scan-action@master
