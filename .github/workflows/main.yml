@@ -25,6 +25,9 @@ jobs:
           repository: 'WebGoat/WebGoat'
           path: 'webgoat'
           
+      - run: |
+          mkdir scans
+          
       - uses: AppThreat/sast-scan-action@master
         with:
           type: "java"
