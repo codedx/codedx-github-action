@@ -1,0 +1,50 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/sigsynopsys/sigma-release-image:latest
+      credentials:
+        username: ${{ secrets.DOCKERHUB_SIGSYNOPSYS_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_SIGSYNOPSYS_PASSWORD }}
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: 'codedx-action'
+          
+      - uses: actions/checkout@v2
+        with:
+          repository: 'https://github.com/WebGoat/WebGoat.git'
+          path: 'webgoat'
+
+      - name: SIGMA analysis
+        run: sigma -V 
+      
+      - name: Code Dx Upload
+        uses: './codedx-action'
+        with:
+          server-url: ${{ secrets.CDX_SERVER_URL }}
+          api-key: ${{ secrets.CDX_API_KEY }}
+          project-id: ${{ secrets.CDX_PROJECT_ID }}
+          source-and-binaries-glob: 'webgoat/**'
+          tool-outputs-glob: 'sigma-results.json'
+          wait-for-completion: false
+        uses: ./
+
+      - name: Run a multi-line script
+        run: |
+          echo Add other actions to build,
+          echo test, and deploy your project.
