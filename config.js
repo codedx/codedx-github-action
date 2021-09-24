@@ -2,13 +2,13 @@ const core = require('@actions/core');
 
 class Config {
     constructor() {
-        this.serverUrl = core.getInput('serverUrl', { required: true })
-        this.apiKey = core.getInput('apiKey', { required: true })
-        this.projectId = core.getInput('projectId', { required: true })
-        this.inputGlobs = core.getInput('sourceAndBinariesGlob', { required: true })
-        this.scanGlobs = core.getInput('toolOutputsGlob')
+        this.serverUrl = core.getInput('server-url', { required: true })
+        this.apiKey = core.getInput('api-key', { required: true })
+        this.projectId = core.getInput('project-id', { required: true })
+        this.inputGlobs = core.getInput('source-and-binaries-glob', { required: true })
+        this.scanGlobs = core.getInput('tool-outputs-glob')
 
-        this.waitForCompletion = core.getInput('waitForCompletion')
+        this.waitForCompletion = core.getInput('wait-for-completion')
 
         // debug vars
         this.tmpDir = ""
@@ -17,7 +17,7 @@ class Config {
     sanitize() {
         if (typeof this.waitForCompletion != 'boolean') {
             const newValue = typeof this.waitForCompletion == 'string' ? this.waitForCompletion == "true" : !!this.waitForCompletion
-            core.warning("waitForCompletion was not a boolean, interpreting as " + newValue)
+            core.warning("wait-for-completion was not a boolean, interpreting as " + newValue)
             this.waitForCompletion = newValue
         }
 

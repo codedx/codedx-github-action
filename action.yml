@@ -2,24 +2,24 @@ name: 'Code Dx: Start Analysis'
 description: 'Wait a designated number of milliseconds'
 inputs:
   # main config options
-  serverUrl:
+  server-url:
     description: 'the URL for the Code Dx server (typically ends with `/codedx`)'
     required: true
-  apiKey:
+  api-key:
     description: 'an API key or Personal Access Token (PAT) to use when connecting to Code Dx'
     required: true
-  projectId:
+  project-id:
     description: 'the ID of a project (an integer) created in Code Dx'
     required: true
-  sourceAndBinariesGlob:
+  source-and-binaries-glob:
     description: 'a file glob matching source and binary files (accepts multiple comma-separated globs)'
     required: true
-  toolOutputsGlob:
+  tool-outputs-glob:
     description: 'a file glob matching output files (ie scan results) from an analysis tool (accepts multiple comma-separated globs)'  
     required: false
   
   # additional settings
-  waitForCompletion:
+  wait-for-completion:
     description: 'whether to wait for the analysis to complete. if true, will fail the build if the analysis encountered an error.'
     required: false
     default: false
