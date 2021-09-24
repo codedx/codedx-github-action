@@ -81,6 +81,7 @@ async function attachScanFiles(scanGlobs, formData) {
     core.info("Searching with globs...")
     let numWritten = 0
     for await (const file of scanFilesGlob.globGenerator()) {
+      numWritten += 1
       core.info('- Adding ' + file)
       const name = path.basename(file)
       formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
