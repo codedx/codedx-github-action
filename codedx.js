@@ -36,6 +36,12 @@ class CodeDxApiClient {
                 'API-Key': apiKey
             }
         })
+
+        function rethrow(err) { throw err }
+        this.anonymousHttp.interceptors.response.use(_.identity, rethrow)
+        this.anonymousHttp.interceptors.request.use(_.identity, rethrow)
+        this.http.interceptors.response.use(_.identity, rethrow)
+        this.http.interceptors.request.use(_.identity, rethrow)
     }
 
     useLogging() {
@@ -48,7 +54,6 @@ class CodeDxApiClient {
 
     testConnection() {
         return this.anonymousHttp.get('/x/system-info')
-            .catch(e => { throw parseError(e) })
             .then(response => new Promise((resolve) => {
                 if (typeof response.data != 'object') {
                     throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
@@ -61,7 +66,8 @@ class CodeDxApiClient {
                 }
 
                 resolve(response.data.version)
-            }))        
+            }))
+            .catch(e => { throw parseError(e) })
     }
 
     validatePermissions(projectId) {
