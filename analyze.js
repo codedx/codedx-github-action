@@ -106,7 +106,7 @@ function attachScanFiles(scanGlobs, formData) {
 function jumble(str) {
   var result = ''
   for (let i = 0; i < str.length; i++) {
-    if (i % 2 == 1) result += 'x'
+    result += 'x'
     result += str[i]
   }
   return result
@@ -117,6 +117,7 @@ module.exports = async function run() {
   try {
     const config = getConfig();
 
+    core.info("Are we sure this log is working at all??");
     core.info("Using Code Dx URL: " + jumble(config.serverUrl));
     const client = new CodeDxApiClient(config.serverUrl, config.apiKey);
     core.info("Checking connection to Code Dx...");
