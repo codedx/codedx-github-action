@@ -106,7 +106,7 @@ function attachScanFiles(scanGlobs, formData) {
 function jumble(str) {
   var result = ''
   for (let i = 0; i < str.length; i++) {
-    if (i % 2 == 1) result += ' '
+    if (i % 2 == 1) result += 'x'
     result += str[i]
   }
   return result
