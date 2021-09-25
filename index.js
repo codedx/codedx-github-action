@@ -1,7 +1,14 @@
 const core = require('@actions/core')
 const analyze = require('./analyze')
 
-analyze().catch(err => {
-    core.info("Caught an error!")
-    core.setFailed(err.message)
-})
+async function main() {
+    try {
+        core.info("Starting from main!")
+        await analyze()
+    } catch (err) {
+        core.info("Caught an error!")
+        core.setFailed(err.message)
+    }
+}
+
+main()
