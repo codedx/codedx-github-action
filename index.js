@@ -1,5 +1,5 @@
 const core = require('@actions/core')
-const analyze = require('./analyze')
+// const analyze = require('./analyze')
 
 // async function main() {
 //     try {
