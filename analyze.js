@@ -117,9 +117,9 @@ module.exports = async function run() {
   try {
     const config = getConfig();
 
+    const client = new CodeDxApiClient(config.serverUrl, config.apiKey);
     core.info("Are we sure this log is working at all??");
     core.info("Using Code Dx URL: " + jumble(config.serverUrl));
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey);
     core.info("Checking connection to Code Dx...");
 
     const codedxVersion = await client.testConnection();
