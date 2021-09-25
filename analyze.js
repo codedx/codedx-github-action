@@ -106,18 +106,18 @@ function attachScanFiles(scanGlobs, formData) {
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   try {
-    const config = getConfig()
+    const config = getConfig();
 
-    core.info("Using Code Dx URL: " + config.serverUrl)
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
-    core.info("Checking connection to Code Dx...")
+    core.info("Using Code Dx URL: " + config.serverUrl);
+    const client = new CodeDxApiClient(config.serverUrl, config.apiKey);
+    core.info("Checking connection to Code Dx...");
 
-    const codedxVersion = await client.testConnection()
-    core.info("Confirmed - using Code Dx " + codedxVersion)
+    const codedxVersion = await client.testConnection();
+    core.info("Confirmed - using Code Dx " + codedxVersion);
 
-    core.info("Checking API key permissions...")
-    await client.validatePermissions(config.projectId)
-    core.info("Connection to Code Dx server is OK.")
+    core.info("Checking API key permissions...");
+    await client.validatePermissions(config.projectId);
+    core.info("Connection to Code Dx server is OK.");
 
     const formData = new FormData()
     
