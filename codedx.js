@@ -26,12 +26,16 @@ function parseError(e) {
 
 class CodeDxApiClient {
     constructor(baseUrl, apiKey) {
-        this.anonymousHttp = axios.create({
-            baseURL: baseUrl
-        })
+        const baseConfig = {
+            baseURL: baseUrl,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        }
+
+        this.anonymousHttp = axios.create(baseConfig)
 
         this.http = axios.create({
-            baseURL: baseUrl,
+            ...baseConfig,
             headers: {
                 'API-Key': apiKey
             }
