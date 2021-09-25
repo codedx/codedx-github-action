@@ -103,12 +103,21 @@ function attachScanFiles(scanGlobs, formData) {
   }
 }
 
+function jumble(str) {
+  var result = ''
+  for (let i = 0; i < str.length; i++) {
+    if (i % 2 == 1) result += ' '
+    result += str[i]
+  }
+  return result
+}
+
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   try {
     const config = getConfig();
 
-    core.info("Using Code Dx URL: " + config.serverUrl);
+    core.info("Using Code Dx URL: " + jumble(config.serverUrl));
     const client = new CodeDxApiClient(config.serverUrl, config.apiKey);
     core.info("Checking connection to Code Dx...");
 
