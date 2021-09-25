@@ -108,6 +108,7 @@ module.exports = async function run() {
   try {
     const config = getConfig()
 
+    core.info("Using Code Dx URL: " + config.serverUrl)
     const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
     core.info("Checking connection to Code Dx...")
 
