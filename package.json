@@ -1,7 +1,7 @@
 {
   "name": "codedx-upload",
   "version": "1.0.0",
-  "description": "JavaScript Action Template",
+  "description": "Analyze your source code and binaries with Code Dx",
   "main": "index.js",
   "scripts": {
     "lint": "eslint .",
@@ -16,14 +16,18 @@
   "keywords": [
     "GitHub",
     "Actions",
-    "JavaScript"
+    "JavaScript",
+    "CodeDx",
+    "SAST",
+    "Scan",
+    "Scanner"
   ],
-  "author": "",
+  "author": "Tyler Camp",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/actions/javascript-action/issues"
+    "url": "https://github.com/codedx/codedx-github-action/issues"
   },
-  "homepage": "https://github.com/actions/javascript-action#readme",
+  "homepage": "https://github.com/codedx/codedx-github-action",
   "dependencies": {
     "@actions/core": "^1.2.5",
     "@actions/glob": "^0.2.0",
