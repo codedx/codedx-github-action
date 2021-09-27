@@ -136,9 +136,7 @@ module.exports = async function run() {
       let lastStatus = null
       do {
         await wait(1000)
-        try {
-          lastStatus = await client.checkJobStatus(jobId)
-        } catch (e) { throw e }
+        lastStatus = await client.checkJobStatus(jobId)
       } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
 
       if (lastStatus == JobStatus.COMPLETED) {

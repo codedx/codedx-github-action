@@ -1,5 +1,5 @@
 {
-  "name": "javascript-action",
+  "name": "codedx-upload",
   "version": "1.0.0",
   "description": "JavaScript Action Template",
   "main": "index.js",
@@ -31,7 +31,6 @@
     "axios": "^0.21.4",
     "axios-logger": "^2.5.0",
     "form-data": "^4.0.0",
-    "superagent": "^6.1.0",
     "underscore": "^1.13.1"
   },
   "devDependencies": {
