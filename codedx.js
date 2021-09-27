@@ -40,12 +40,6 @@ class CodeDxApiClient {
                 'API-Key': apiKey
             }
         })
-
-        function rethrow(err) { throw err }
-        this.anonymousHttp.interceptors.response.use(_.identity, rethrow)
-        this.anonymousHttp.interceptors.request.use(_.identity, rethrow)
-        this.http.interceptors.response.use(_.identity, rethrow)
-        this.http.interceptors.request.use(_.identity, rethrow)
     }
 
     useLogging() {
