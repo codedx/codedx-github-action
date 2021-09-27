@@ -110,34 +110,20 @@ function attachScanFiles(scanGlobs, formData) {
   }
 }
 
-function jumble(str) {
-  var result = ''
-  for (let i = 0; i < str.length; i++) {
-    result += 'x'
-    result += str[i]
-  }
-  return result
-}
-
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   try {
-    const config = getConfig();
+    const config = getConfig()
 
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey);
-    await wait(1000);
-    core.error("Are we sure this log is working at all??");
-    await wait(1000);
-    core.error("Using Code Dx URL: " + jumble(config.serverUrl));
-    await wait(1000);
-    core.error("Checking connection to Code Dx...");
+    const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
+    core.error("Checking connection to Code Dx...")
 
-    const codedxVersion = await client.testConnection();
-    core.info("Confirmed - using Code Dx " + codedxVersion);
+    const codedxVersion = await client.testConnection()
+    core.info("Confirmed - using Code Dx " + codedxVersion)
 
-    core.info("Checking API key permissions...");
-    await client.validatePermissions(config.projectId);
-    core.info("Connection to Code Dx server is OK.");
+    core.info("Checking API key permissions...")
+    await client.validatePermissions(config.projectId)
+    core.info("Connection to Code Dx server is OK.")
 
     const formData = new FormData()
     
@@ -157,9 +143,7 @@ module.exports = async function run() {
       let lastStatus = null
       do {
         await wait(1000)
-        try {
-          lastStatus = await client.checkJobStatus(jobId)
-        } catch (e) { throw e }
+        lastStatus = await client.checkJobStatus(jobId)
       } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
 
       if (lastStatus == JobStatus.COMPLETED) {
