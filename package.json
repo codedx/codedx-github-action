@@ -11,16 +11,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/javascript-action.git"
+    "url": "git+https://github.com/codedx/codedx-github-action.git"
   },
   "keywords": [
-    "GitHub",
-    "Actions",
-    "JavaScript",
-    "CodeDx",
-    "SAST",
-    "Scan",
-    "Scanner"
+    "codedx",
+    "sast",
+    "scan",
+    "scanner",
+    "scanning",
+    "security",
+    "analyze",
+    "analysis"
   ],
   "author": "Tyler Camp",
   "license": "MIT",
