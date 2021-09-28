@@ -115,7 +115,7 @@ module.exports = async function run() {
   try {
     const config = getConfig()
 
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
+    const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
     core.error("Checking connection to Code Dx...")
 
     const codedxVersion = await client.testConnection()
@@ -165,6 +165,7 @@ module.exports = async function run() {
 const axios = __nccwpck_require__(6545).default
 const _ = __nccwpck_require__(3571)
 const AxiosLogger = __nccwpck_require__(7370)
+const https = __nccwpck_require__(7211)
 
 AxiosLogger.setGlobalConfig({
     headers: true
@@ -189,11 +190,15 @@ function parseError(e) {
 }
 
 class CodeDxApiClient {
-    constructor(baseUrl, apiKey) {
+    constructor(baseUrl, apiKey, caCert) {
+        const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
+
         const baseConfig = {
             baseURL: baseUrl,
             maxContentLength: Infinity,
-            maxBodyLength: Infinity
+            maxBodyLength: Infinity,
+
+            httpsAgent
         }
 
         this.anonymousHttp = axios.create(baseConfig)
@@ -204,12 +209,6 @@ class CodeDxApiClient {
                 'API-Key': apiKey
             }
         })
-
-        function rethrow(err) { throw err }
-        this.anonymousHttp.interceptors.response.use(_.identity, rethrow)
-        this.anonymousHttp.interceptors.request.use(_.identity, rethrow)
-        this.http.interceptors.response.use(_.identity, rethrow)
-        this.http.interceptors.request.use(_.identity, rethrow)
     }
 
     useLogging() {
@@ -293,6 +292,7 @@ class Config {
         this.scanGlobs = core.getInput('tool-outputs-glob')
 
         this.waitForCompletion = core.getInput('wait-for-completion')
+        this.caCert = core.getInput('ca-cert')
 
         // debug vars
         this.tmpDir = ""
