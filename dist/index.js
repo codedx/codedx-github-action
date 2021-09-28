@@ -116,7 +116,7 @@ module.exports = async function run() {
     const config = getConfig()
 
     const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
-    core.error("Checking connection to Code Dx...")
+    core.info("Checking connection to Code Dx...")
 
     const codedxVersion = await client.testConnection()
     core.info("Confirmed - using Code Dx " + codedxVersion)
@@ -299,10 +299,13 @@ class Config {
     }
 
     sanitize() {
-        if (typeof this.waitForCompletion != 'boolean') {
-            const newValue = typeof this.waitForCompletion == 'string' ? this.waitForCompletion == "true" : !!this.waitForCompletion
-            core.warning("wait-for-completion was not a boolean, interpreting as " + newValue)
-            this.waitForCompletion = newValue
+        function isYamlTrue(value) {
+            value = value.toLowerCase().trim()
+            return ["yes", "on", "true"].indexOf(value) >= 0
+        }
+
+        if (typeof this.waitForCompletion == 'string') {
+            this.waitForCompletion = isYamlTrue(this.waitForCompletion)
         }
 
         if (typeof this.projectId != 'number') {
