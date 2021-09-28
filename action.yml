@@ -23,6 +23,9 @@ inputs:
     description: 'whether to wait for the analysis to complete. if true, will fail the build if the analysis encountered an error.'
     required: false
     default: false
+  ca-cert:
+    description: 'a custom CA cert to use for HTTPS requests to Code Dx'
+    required: false
 runs:
   using: 'node12'
   main: 'dist/index.js'

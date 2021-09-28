@@ -9,6 +9,7 @@ class Config {
         this.scanGlobs = core.getInput('tool-outputs-glob')
 
         this.waitForCompletion = core.getInput('wait-for-completion')
+        this.caCert = core.getInput('ca-cert')
 
         // debug vars
         this.tmpDir = ""

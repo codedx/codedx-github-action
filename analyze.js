@@ -108,7 +108,7 @@ module.exports = async function run() {
   try {
     const config = getConfig()
 
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey)
+    const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
     core.error("Checking connection to Code Dx...")
 
     const codedxVersion = await client.testConnection()

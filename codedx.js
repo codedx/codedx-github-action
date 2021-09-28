@@ -1,6 +1,7 @@
 const axios = require('axios').default
 const _ = require('underscore')
 const AxiosLogger = require('axios-logger')
+const https = require('https')
 
 AxiosLogger.setGlobalConfig({
     headers: true
@@ -25,11 +26,15 @@ function parseError(e) {
 }
 
 class CodeDxApiClient {
-    constructor(baseUrl, apiKey) {
+    constructor(baseUrl, apiKey, caCert) {
+        const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
+
         const baseConfig = {
             baseURL: baseUrl,
             maxContentLength: Infinity,
-            maxBodyLength: Infinity
+            maxBodyLength: Infinity,
+
+            httpsAgent
         }
 
         this.anonymousHttp = axios.create(baseConfig)

@@ -31,6 +31,7 @@ The workflow will be set to fail if:
 | `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to Code Dx |               | Yes      |
 | `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                              | `undefined`   | No       |
 | `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                              | `false`       | No       |
+| `ca-cert`                  | A custom CA cert to use for HTTPS connections to Code Dx                                                 | `undefined`   | No       |
 
 ## Sample Workflow
 
