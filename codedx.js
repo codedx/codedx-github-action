@@ -47,6 +47,8 @@ class CodeDxApiClient {
         })
     }
 
+    // WARNING: This logging will emit Header data, which contains the Code Dx API key. This should not be exposed and should only
+    //          be used for internal testing.
     useLogging() {
         this.anonymousHttp.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
         this.http.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
