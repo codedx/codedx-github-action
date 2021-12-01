@@ -38,114 +38,102 @@ function buildGlobObject(globsArray) {
   return glob.create(globsArray.join('\n'))
 }
 
-function prepareInputsZip(inputsGlob, targetFile) {
-  return Synchronously(() => {
-      const separatedInputGlobs = commaSeparated(inputsGlob);
-      core.debug("Got input file globs: " + separatedInputGlobs)
-      if (!areGlobsValid(separatedInputGlobs)) {
-        throw new Error("No globs specified for source/binary input files")
-      }
-      return separatedInputGlobs  
-    })
-    .then((globs) => buildGlobObject(globs))
-    .then(async (inputFilesGlob) => {
-      const output = fs.createWriteStream(targetFile);
-      const archive = archiver('zip');
-      archive.on('end', () => core.info("Finished writing ZIP"))
-      archive.on('warning', (err) => core.warning("Warning when writing ZIP: ", err))
-      archive.on('error', (err) => core.error("Error when writing ZIP: ", err))
+async function prepareInputsZip(inputsGlob, targetFile) {
+  const separatedInputGlobs = commaSeparated(inputsGlob);
+  core.debug("Got input file globs: " + separatedInputGlobs)
+  if (!areGlobsValid(separatedInputGlobs)) {
+    throw new Error("No globs specified for source/binary input files")
+  }
 
-      archive.pipe(output);
+  const inputFilesGlob = await buildGlobObject(separatedInputGlobs)
+  const output = fs.createWriteStream(targetFile);
+  const archive = archiver('zip');
+  archive.on('end', () => core.info("Finished writing ZIP"))
+  archive.on('warning', (err) => core.warning("Warning when writing ZIP: ", err))
+  archive.on('error', (err) => core.error("Error when writing ZIP: ", err))
 
-      let numWritten = 0
-      for await (const file of inputFilesGlob.globGenerator()) {
-        archive.file(file);
-        numWritten += 1
-      }
-      await archive.finalize()
-      return numWritten
-    })
+  archive.pipe(output);
+
+  let numWritten = 0
+  for await (const file of inputFilesGlob.globGenerator()) {
+    archive.file(file);
+    numWritten += 1
+  }
+  await archive.finalize()
+  return numWritten
 }
 
-function attachInputsZip(inputGlobs, formData, tmpDir) {
+async function attachInputsZip(inputGlobs, formData, tmpDir) {
   const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
-  return prepareInputsZip(inputGlobs, zipTarget)
-    .then((numFiles) => Synchronously(() => {
-      if (numFiles == 0) {
-        throw new Error("No files were matched by the source/binary glob(s)")
-      } else {
-        core.info(`Added ${numFiles} files`)
-      }
+  const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
+  if (numFiles == 0) {
+    throw new Error("No files were matched by the source/binary glob(s)")
+  } else {
+    core.info(`Added ${numFiles} files`)
+  }
 
-      formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
-    }))
+  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
 }
 
-function attachScanFiles(scanGlobs, formData) {
+async function attachScanFiles(scanGlobs, formData) {
   const separatedScanGlobs = commaSeparated(scanGlobs)
   core.debug("Got scan file globs: " + separatedScanGlobs)
 
   if (areGlobsValid(separatedScanGlobs)) {
-    return buildGlobObject(separatedScanGlobs)
-      .then(async (scanFilesGlob) => {
-        core.info("Searching with globs...")
-        let numWritten = 0
-        for await (const file of scanFilesGlob.globGenerator()) {
-          numWritten += 1
-          core.info('- Adding ' + file)
-          const name = path.basename(file)
-          formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
-        }
-        core.info(`Found and added ${numWritten} scan files`)
-      })
+    const scanFilesGlob = await buildGlobObject(separatedScanGlobs)
+    core.info("Searching with globs...")
+    let numWritten = 0
+    for await (const file of scanFilesGlob.globGenerator()) {
+      numWritten += 1
+      core.info('- Adding ' + file)
+      const name = path.basename(file)
+      formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
+    }
+    core.info(`Found and added ${numWritten} scan files`)
   } else {
-    return Synchronously(() => core.info("(Scan files skipped as no globs were specified)"))
+    core.info("(Scan files skipped as no globs were specified)")
   }
 }
 
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
-  try {
-    const config = getConfig()
+  const config = getConfig()
 
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
-    core.info("Checking connection to Code Dx...")
+  const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
+  core.info("Checking connection to Code Dx...")
 
-    const codedxVersion = await client.testConnection()
-    core.info("Confirmed - using Code Dx " + codedxVersion)
+  const codedxVersion = await client.testConnection()
+  core.info("Confirmed - using Code Dx " + codedxVersion)
 
-    core.info("Checking API key permissions...")
-    await client.validatePermissions(config.projectId)
-    core.info("Connection to Code Dx server is OK.")
+  core.info("Checking API key permissions...")
+  await client.validatePermissions(config.projectId)
+  core.info("Connection to Code Dx server is OK.")
 
-    const formData = new FormData()
-    
-    core.info("Preparing source/binaries ZIP...")
-    await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+  const formData = new FormData()
+  
+  core.info("Preparing source/binaries ZIP...")
+  await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
 
-    core.info("Adding scan files...")
-    await attachScanFiles(config.scanGlobs, formData)
+  core.info("Adding scan files...")
+  await attachScanFiles(config.scanGlobs, formData)
 
-    core.info("Uploading to Code Dx...")
-    const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
+  core.info("Uploading to Code Dx...")
+  const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
 
-    core.info("Started analysis #" + analysisId)
+  core.info("Started analysis #" + analysisId)
 
-    if (config.waitForCompletion) {
-      core.info("Waiting for job to finish...")
-      let lastStatus = null
-      do {
-        await wait(1000)
-        lastStatus = await client.checkJobStatus(jobId)
-      } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
+  if (config.waitForCompletion) {
+    core.info("Waiting for job to finish...")
+    let lastStatus = null
+    do {
+      await wait(1000)
+      lastStatus = await client.checkJobStatus(jobId)
+    } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
 
-      if (lastStatus == JobStatus.COMPLETED) {
-        core.info("Analysis finished! Completed with status: " + lastStatus)
-      } else {
-        throw new Error("Analysis finished with non-complete status: " + lastStatus)
-      }
+    if (lastStatus == JobStatus.COMPLETED) {
+      core.info("Analysis finished! Completed with status: " + lastStatus)
+    } else {
+      throw new Error("Analysis finished with non-complete status: " + lastStatus)
     }
-  } catch (ex) {
-    throw ex
   }
 }
