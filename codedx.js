@@ -78,9 +78,11 @@ class CodeDxApiClient {
     }
 
     async validatePermissions(projectId) {
-        const neededPermissions = [
-            `analysis:create:${projectId}`
+        const cleanNeededPermissions = [
+            'analysis:create'
         ]
+
+        const neededPermissions = cleanNeededPermissions.map(p => `${p}:${projectId}`)
 
         const response = await this.http.post('/x/check-permissions', neededPermissions).catch(e => {
             if (axios.isAxiosError(e) && e.response.status == 403) {
@@ -93,7 +95,11 @@ class CodeDxApiClient {
         const permissions = response.data
         const missingPermissions = neededPermissions.filter(p => !permissions[p])
         if (missingPermissions.length > 0) {
-            const summary = missingPermissions.join(', ')
+            const cleanMissingPermissions = missingPermissions.map(p => {
+                const parts = p.split(':')
+                return parts.slice(0, -1).join(':')
+            })
+            const summary = cleanMissingPermissions.join(', ')
             throw new Error("The following permissions were missing for the given API Key: " + summary)
         }
     }
