@@ -39,3 +39,4 @@ jobs:
           source-and-binaries-glob: 'webgoat/**'
           tool-outputs-glob: 'pmd-sarif.json'
           wait-for-completion: false
+          ca-cert: ${{ secrets.CDX_CERT }}
