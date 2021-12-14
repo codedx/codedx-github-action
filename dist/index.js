@@ -12,6 +12,9 @@ const archiver = __nccwpck_require__(3084)
 const fs = __nccwpck_require__(5747)
 const FormData = __nccwpck_require__(4334)
 const CodeDxApiClient = __nccwpck_require__(7416)
+const path = __nccwpck_require__(5622)
+
+const getConfig = __nccwpck_require__(5532).get
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -26,86 +29,132 @@ const JobStatus = {
   FAILED: "failed"
 }
 
-function commaSeparated(str) {
-  return str.split(',').map(s => s.trim()).filter(s => s.length > 0)
+function Synchronously(fn) {
+  return new Promise((resolve) => resolve(fn()))
 }
 
-async function buildGlobObject(globsArray) {
-  if (!globsArray || globsArray.length == 0) return null
+function commaSeparated(str) {
+  return (str || '').split(',').map(s => s.trim()).filter(s => s.length > 0)
+}
+
+function areGlobsValid(globsArray) {
+  return !!globsArray && globsArray.length
+}
+
+function buildGlobObject(globsArray) {
   return glob.create(globsArray.join('\n'))
 }
 
-async function prepareInputsZip(inputsGlob, targetFile) {
-  const separatedInputGlobs = commaSeparated(inputsGlob);
-  core.debug("Got input file globs: " + separatedInputGlobs)
+function prepareInputsZip(inputsGlob, targetFile) {
+  return Synchronously(() => {
+      const separatedInputGlobs = commaSeparated(inputsGlob);
+      core.debug("Got input file globs: " + separatedInputGlobs)
+      if (!areGlobsValid(separatedInputGlobs)) {
+        throw new Error("No globs specified for source/binary input files")
+      }
+      return separatedInputGlobs  
+    })
+    .then((globs) => buildGlobObject(globs))
+    .then(async (inputFilesGlob) => {
+      const output = fs.createWriteStream(targetFile);
+      const archive = archiver('zip');
+      archive.on('end', () => console.log("Finished writing ZIP"))
+      archive.on('warning', (err) => console.log("Warning: ", err))
+      archive.on('error', (err) => console.log("Error: ", err))
 
-  const inputFilesGlob = await buildGlobObject(separatedInputGlobs);
+      archive.pipe(output);
 
-  const output = fs.createWriteStream(targetFile);
-  const archive = archiver('zip');
-  archive.on('end', () => console.log("Finished writing ZIP"))
-  archive.on('warning', (err) => console.log("Warning: ", err))
-  archive.on('error', (err) => console.log("Error: ", err))
+      let numWritten = 0
+      for await (const file of inputFilesGlob.globGenerator()) {
+        archive.file(file);
+        numWritten += 1
+      }
+      await archive.finalize()
+      return numWritten
+    })
+}
 
-  archive.pipe(output);
+function attachInputsZip(inputGlobs, formData, tmpDir) {
+  const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
+  return prepareInputsZip(inputGlobs, zipTarget)
+    .then((numFiles) => Synchronously(() => {
+      if (numFiles == 0) {
+        throw new Error("No files were matched by the source/binary glob(s)")
+      } else {
+        core.info(`Added ${numFiles} files`)
+      }
 
-  for await (const file of inputFilesGlob.globGenerator()) {
-    archive.file(file);
+      formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
+    }))
+}
+
+function attachScanFiles(scanGlobs, formData) {
+  const separatedScanGlobs = commaSeparated(scanGlobs)
+  core.debug("Got scan file globs: " + separatedScanGlobs)
+
+  if (areGlobsValid(separatedScanGlobs)) {
+    return buildGlobObject(separatedScanGlobs)
+      .then(async (scanFilesGlob) => {
+        core.info("Searching with globs...")
+        let numWritten = 0
+        for await (const file of scanFilesGlob.globGenerator()) {
+          numWritten += 1
+          core.info('- Adding ' + file)
+          const name = path.basename(file)
+          formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
+        }
+        core.info(`Found and added ${numWritten} scan files`)
+      })
+  } else {
+    return Synchronously(() => core.info("(Scan files skipped as no globs were specified)"))
   }
-
-  await archive.finalize();
 }
 
 // most @actions toolkit packages have async methods
-module.exports = async function run({
-  // common inputs
-  serverUrl, apiKey, projectId, inputGlobs, scanGlobs,
+module.exports = async function run() {
+  try {
+    const config = getConfig()
 
-  // config options for testing
-  tmpDir, 
-}) {
-  const client = new CodeDxApiClient(serverUrl, apiKey)
-  core.info("Checking connection to Code Dx...")
+    const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
+    core.info("Checking connection to Code Dx...")
 
-  await client.testConnection()
+    const codedxVersion = await client.testConnection()
+    core.info("Confirmed - using Code Dx " + codedxVersion)
 
-  core.info("Checking API key permissions...")
-  await client.validatePermissions(projectId)
+    core.info("Checking API key permissions...")
+    await client.validatePermissions(config.projectId)
+    core.info("Connection to Code Dx server is OK.")
 
-  core.info("Connection to Code Dx server is OK.")
+    const formData = new FormData()
+    
+    core.info("Preparing source/binaries ZIP...")
+    await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
 
-  // const separatedResultsGlobs = commaSeparated(toolResultsGlob)
-  // const resultsFilesGlob = await buildGlobObject(separatedResultsGlobs)
+    core.info("Adding scan files...")
+    await attachScanFiles(config.scanGlobs, formData)
 
-  const zipTarget = "codedx-inputfiles.zip"
+    core.info("Uploading to Code Dx...")
+    const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
 
-  core.info("Preparing source/binaries ZIP...")
-  const inputFilesZip = await prepareInputsZip(inputGlobs, zipTarget)
+    core.info("Started analysis #" + analysisId)
 
-  core.info("Uploading to Code Dx...")
-  const formData = new FormData()
-  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
+    if (config.waitForCompletion) {
+      core.info("Waiting for job to finish...")
+      let lastStatus = null
+      do {
+        await wait(1000)
+        lastStatus = await client.checkJobStatus(jobId)
+      } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
 
-  const { analysisId, jobId } = await client.runAnalysis(projectId, formData)
-  core.info("Started analysis #" + analysisId)
-
-  core.info("Waiting for job to finish...")
-  let lastStatus = null
-  do {
-    await wait(1000)
-    lastStatus = await client.checkJobStatus(jobId)
-  } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
-
-  core.info("Analysis finished! Completed with status: " + lastStatus)
-
-  // const ms = core.getInput('milliseconds');
-  // core.info(`Waiting ${ms} milliseconds ...`);
-
-  // core.debug((new Date()).toTimeString()); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
-  // await wait(parseInt(ms));
-  // core.info((new Date()).toTimeString());
-
-  // core.setOutput('time', new Date().toTimeString());
+      if (lastStatus == JobStatus.COMPLETED) {
+        core.info("Analysis finished! Completed with status: " + lastStatus)
+      } else {
+        throw new Error("Analysis finished with non-complete status: " + lastStatus)
+      }
+    }
+  } catch (ex) {
+    throw ex
+  }
 }
 
 /***/ }),
@@ -116,19 +165,46 @@ module.exports = async function run({
 const axios = __nccwpck_require__(6545).default
 const _ = __nccwpck_require__(3571)
 const AxiosLogger = __nccwpck_require__(7370)
+const https = __nccwpck_require__(7211)
 
 AxiosLogger.setGlobalConfig({
     headers: true
 })
 
+function parseError(e) {
+    if (axios.isAxiosError(e) && e.response) {
+        let msg = `${e.response.statusText} (HTTP ${e.response.status})`
+
+        if (e.response.data) {
+            if (e.response.data.error) {
+                msg += `: ${e.response.data.error}`
+            } else {
+                msg += `: received response ${JSON.stringify(e.response.data)}`
+            }
+        }
+
+        return new Error(msg)
+    } else {
+        return e
+    }
+}
+
 class CodeDxApiClient {
-    constructor(baseUrl, apiKey) {
-        this.anonymousHttp = axios.create({
-            baseURL: baseUrl
-        })
+    constructor(baseUrl, apiKey, caCert) {
+        const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
+
+        const baseConfig = {
+            baseURL: baseUrl,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+
+            httpsAgent
+        }
+
+        this.anonymousHttp = axios.create(baseConfig)
 
         this.http = axios.create({
-            baseURL: baseUrl,
+            ...baseConfig,
             headers: {
                 'API-Key': apiKey
             }
@@ -143,35 +219,58 @@ class CodeDxApiClient {
         this.http.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
     }
 
-    async testConnection() {
-        await this.anonymousHttp.get('/x/system-info')
+    testConnection() {
+        return this.anonymousHttp.get('/x/system-info')
+            .then(response => new Promise((resolve) => {
+                if (typeof response.data != 'object') {
+                    throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
+                }
+        
+                const expectedFields = ['version', 'date']
+                const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
+                if (unexpectedFields.length > 0) {
+                    throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this a Code Dx instance?`)
+                }
+
+                resolve(response.data.version)
+            }))
+            .catch(e => { throw parseError(e) })
     }
 
-    async validatePermissions(projectId) {
+    validatePermissions(projectId) {
         const neededPermissions = [
             `analysis:create:${projectId}`
         ]
-        const response = await this.http.post('/x/check-permissions', neededPermissions)
-        const permissions = response.data
-        const missingPermissions = neededPermissions.filter(p => !permissions[p])
-        if (missingPermissions.length > 0) {
-            const summary = missingPermissions.join(', ')
-            throw new Error("The following permissions were missing for the given API Key: " + summary)
-        }
+
+        return this.http.post('/x/check-permissions', neededPermissions)
+            .catch(e => {
+                if (axios.isAxiosError(e) && e.response.status == 403) {
+                    throw new Error("Permissions check responded with HTTP 403, is the API key valid?")
+                } else {
+                    throw e
+                }
+            })
+            .then(response => new Promise(resolve => {
+                const permissions = response.data
+                const missingPermissions = neededPermissions.filter(p => !permissions[p])
+                if (missingPermissions.length > 0) {
+                    const summary = missingPermissions.join(', ')
+                    throw new Error("The following permissions were missing for the given API Key: " + summary)
+                }
+                resolve()
+            }))
     }
 
-    async runAnalysis(projectId, formData) {
-        const result = await this.http.post(`/api/projects/${projectId}/analysis`, formData, {
-            headers: {
-                ...formData.getHeaders()
-            }
-        })
-        return result.data
+    runAnalysis(projectId, formData) {
+        return this.http.post(`/api/projects/${projectId}/analysis`, formData, { headers: formData.getHeaders() })
+            .catch(ex => { throw parseError(ex) })
+            .then(response => new Promise(resolve => resolve(response.data)))
     }
 
-    async checkJobStatus(jobId) {
-        const result = await this.http.get('/api/jobs/' + jobId)
-        return result.data.status
+    checkJobStatus(jobId) {
+        return this.http.get('/api/jobs/' + jobId)
+            .catch(ex => { throw parseError(ex) })
+            .then(result => new Promise(resolve => resolve(result.data.status)))
     }
 }
 
@@ -179,30 +278,76 @@ module.exports = CodeDxApiClient
 
 /***/ }),
 
-/***/ 2932:
-/***/ ((__unused_webpack_module, __unused_webpack_exports, __nccwpck_require__) => {
+/***/ 5532:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(2186);
-const glob = __nccwpck_require__(8090)
-const _ = __nccwpck_require__(3571)
-const analyze = __nccwpck_require__(4418)
 
-// most @actions toolkit packages have async methods
-async function run() {
-    try {
-        analyze({
-            serverUrl: core.getInput('serverUrl'),
-            apiKey: core.getInput('apiKey'),
-            projectId: core.getInput('projectId'),
-            inputGlobs: core.getInput('sourceAndBinariesGlob'),
-            scanGlobs: core.getInput('toolOutputsGlob')
-        })
-    } catch (error) {
-        core.setFailed(error.message);
+class Config {
+    constructor() {
+        this.serverUrl = core.getInput('server-url', { required: true })
+        this.apiKey = core.getInput('api-key', { required: true })
+        this.projectId = core.getInput('project-id', { required: true })
+        this.inputGlobs = core.getInput('source-and-binaries-glob', { required: true })
+        this.scanGlobs = core.getInput('tool-outputs-glob')
+
+        this.waitForCompletion = core.getInput('wait-for-completion')
+        this.caCert = core.getInput('ca-cert')
+
+        // debug vars
+        this.tmpDir = ""
+    }
+
+    sanitize() {
+        function isYamlTrue(value) {
+            value = value.toLowerCase().trim()
+            return ["yes", "on", "true"].indexOf(value) >= 0
+        }
+
+        if (typeof this.waitForCompletion == 'string') {
+            this.waitForCompletion = isYamlTrue(this.waitForCompletion)
+        }
+
+        if (typeof this.projectId != 'number') {
+            try {
+                this.projectId = parseInt(this.projectId)
+            } catch (e) {
+                throw new Error("Invalid value for projectId, expected a number but got a " + (typeof this.projectId))
+            }
+        }
     }
 }
 
-run();
+let usedConfig = null
+
+module.exports = {
+    Config,
+    get: function() {
+        if (!usedConfig) {
+            usedConfig = new Config()
+            usedConfig.sanitize()
+        }
+        return usedConfig
+    },
+    set: function(customConfig) {
+        if (!customConfig instanceof Config) {
+            const realConfig = new Config()
+            Object.keys(customConfig).forEach(k => realConfig[k] = customConfig[k])
+            customConfig = realConfig
+        }
+        usedConfig = customConfig
+    }
+}
+
+/***/ }),
+
+/***/ 2932:
+/***/ ((__unused_webpack_module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const core = __nccwpck_require__(2186)
+const analyze = __nccwpck_require__(4418)
+
+analyze().catch(err => core.setFailed(err.message))
 
 
 /***/ }),

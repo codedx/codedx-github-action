@@ -1,0 +1,42 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: 'codedx-action'
+          
+      - uses: actions/checkout@v2
+        with:
+          repository: 'WebGoat/WebGoat'
+          path: 'webgoat'
+          
+      - run: |
+          wget -q https://github.com/pmd/pmd/releases/download/pmd_releases%2F6.38.0/pmd-bin-6.38.0.zip
+          unzip pmd-bin-6.38.0.zip
+          ./pmd-bin-6.38.0/bin/run.sh pmd -d webgoat -f sarif -R rulesets/java/quickstart.xml -r pmd-sarif.json -failOnViolation false
+      
+      - name: Code Dx Upload
+        uses: './codedx-action'
+        with:
+          server-url: ${{ secrets.CDX_SERVER_URL }}
+          api-key: ${{ secrets.CDX_API_KEY }}
+          project-id: ${{ secrets.CDX_PROJECT_ID }}
+          source-and-binaries-glob: 'webgoat/**'
+          tool-outputs-glob: 'pmd-sarif.json'
+          wait-for-completion: false
+          ca-cert: ${{ secrets.CDX_CERT }}

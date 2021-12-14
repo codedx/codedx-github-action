@@ -1,116 +1,55 @@
-# Create a JavaScript Action
+# GitHub Action for Code Dx
 
-<p align="center">
-  <a href="https://github.com/actions/javascript-action/actions"><img alt="javscript-action status" src="https://github.com/actions/javascript-action/workflows/units-test/badge.svg"></a>
-</p>
+This GitHub action can be used to push source code, binaries, and scan results to a [Code Dx](https://codedx.com) instance from within a GitHub workflow; source and binaries are automatically scanned by Code Dx using its built-in analysis tools.
 
-Use this template to bootstrap the creation of a JavaScript action.:rocket:
+## Features and Behavior
 
-This template includes tests, linting, a validation workflow, publishing, and versioning guidance.
+Comma-separated globs are used to select source/binary files and scan-result files. 
 
-If you are new, there's also a simpler introduction.  See the [Hello World JavaScript Action](https://github.com/actions/hello-world-javascript-action)
+The Action can optionally wait for analysis completion, writing the final status of the analysis to logs.
 
-## Create an action from this template
+The workflow will be set to fail if:
 
-Click the `Use this Template` and provide the new repo details for your action
+- The source/binaries glob(s) fail to match any files
+- There are any errors when contacting Code Dx
+- The analysis ends in failure
 
-## Code in Main
+## Requirements
 
-Install the dependencies
+- A deployed, licensed instance of Code Dx (any license)
+- Access from GitHub to Code Dx via HTTP, or via HTTPS with a publicly-recognizable certificate (ie from well-known CA)
+- A Project in Code Dx to store results
+- An API Key or Personal Access Token with "Create" permissions for the Project
 
-```bash
-npm install
-```
+## Action Inputs
 
-Run the tests :heavy_check_mark:
+| Input Name                 | Description                                                                                              | Default Value | Required |
+|----------------------------|----------------------------------------------------------------------------------------------------------|---------------|----------|
+| `server-url`               | The URL for the Code Dx server (typically ends with `/codedx`)                                           |               | Yes      |
+| `api-key`                  | An API Key or Personal Access Token to use when connecting to Code Dx                                    |               | Yes      |
+| `project-id`               | The ID of a project (an integer) created in Code Dx                                                      |               | Yes      |
+| `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to Code Dx |               | Yes      |
+| `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                              | `undefined`   | No       |
+| `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                              | `false`       | No       |
+| `ca-cert`                  | A custom CA cert to use for HTTPS connections to Code Dx                                                 | `undefined`   | No       |
 
-```bash
-$ npm test
-
- PASS  ./index.test.js
-  ✓ throws invalid number (3ms)
-  ✓ wait 500 ms (504ms)
-  ✓ test runs (95ms)
-...
-```
-
-## Change action.yml
-
-The action.yml defines the inputs and output for your action.
-
-Update the action.yml with your name, description, inputs and outputs for your action.
-
-See the [documentation](https://help.github.com/en/articles/metadata-syntax-for-github-actions)
-
-## Change the Code
-
-Most toolkit and CI/CD operations involve async operations so the action is run in an async function.
-
-```javascript
-const core = require('@actions/core');
-...
-
-async function run() {
-  try {
-      ...
-  }
-  catch (error) {
-    core.setFailed(error.message);
-  }
-}
-
-run()
-```
-
-See the [toolkit documentation](https://github.com/actions/toolkit/blob/master/README.md#packages) for the various packages.
-
-## Package for distribution
-
-GitHub Actions will run the entry point from the action.yml. Packaging assembles the code into one file that can be checked in to Git, enabling fast and reliable execution and preventing the need to check in node_modules.
-
-Actions are run from GitHub repos.  Packaging the action will create a packaged action in the dist folder.
-
-Run prepare
-
-```bash
-npm run prepare
-```
-
-Since the packaged index.js is run from the dist folder.
-
-```bash
-git add dist
-```
-
-## Create a release branch
-
-Users shouldn't consume the action from master since that would be latest code and actions can break compatibility between major versions.
-
-Checkin to the v1 release branch
-
-```bash
-git checkout -b v1
-git commit -a -m "v1 release"
-```
-
-```bash
-git push origin v1
-```
-
-Note: We recommend using the `--license` option for ncc, which will create a license file for all of the production node modules used in your project.
-
-Your action is now published! :rocket:
-
-See the [versioning documentation](https://github.com/actions/toolkit/blob/master/docs/action-versioning.md)
-
-## Usage
-
-You can now consume the action by referencing the v1 branch
+## Sample Workflow
 
 ```yaml
-uses: actions/javascript-action@v1
-with:
-  milliseconds: 1000
-```
+on: [push]
 
-See the [actions tab](https://github.com/actions/javascript-action/actions) for runs of this action! :rocket:
+jobs:
+  codedx-analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Code Dx Upload
+        uses: 'codedx/codedx-upload@v1.0'
+        with:
+          server-url: ${{ secrets.CDX_SERVER_URL }}
+          api-key: ${{ secrets.CDX_API_KEY }}
+          project-id: ${{ secrets.CDX_PROJECT_ID }}
+          source-and-binaries-glob: './**'
+          wait-for-completion: false
+```
