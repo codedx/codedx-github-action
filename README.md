@@ -17,7 +17,7 @@ The workflow will be set to fail if:
 ## Requirements
 
 - A deployed, licensed instance of Code Dx (any license)
-- Access from GitHub to Code Dx via HTTP, or via HTTPS with a publicly-recognizable certificate (ie from well-known CA)
+- Access from GitHub to Code Dx via HTTP, or via HTTPS with a recognizable certificate (use the `ca-cert` param if not using a public CA)
 - A Project in Code Dx to store results
 - An API Key or Personal Access Token with "Create" permissions for the Project
 
