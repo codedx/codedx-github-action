@@ -22,10 +22,6 @@ const JobStatus = {
   FAILED: "failed"
 }
 
-function Synchronously(fn) {
-  return new Promise((resolve) => resolve(fn()))
-}
-
 function commaSeparated(str) {
   return (str || '').split(',').map(s => s.trim()).filter(s => s.length > 0)
 }
