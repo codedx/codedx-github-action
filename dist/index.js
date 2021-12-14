@@ -29,10 +29,6 @@ const JobStatus = {
   FAILED: "failed"
 }
 
-function Synchronously(fn) {
-  return new Promise((resolve) => resolve(fn()))
-}
-
 function commaSeparated(str) {
   return (str || '').split(',').map(s => s.trim()).filter(s => s.length > 0)
 }
@@ -45,115 +41,103 @@ function buildGlobObject(globsArray) {
   return glob.create(globsArray.join('\n'))
 }
 
-function prepareInputsZip(inputsGlob, targetFile) {
-  return Synchronously(() => {
-      const separatedInputGlobs = commaSeparated(inputsGlob);
-      core.debug("Got input file globs: " + separatedInputGlobs)
-      if (!areGlobsValid(separatedInputGlobs)) {
-        throw new Error("No globs specified for source/binary input files")
-      }
-      return separatedInputGlobs  
-    })
-    .then((globs) => buildGlobObject(globs))
-    .then(async (inputFilesGlob) => {
-      const output = fs.createWriteStream(targetFile);
-      const archive = archiver('zip');
-      archive.on('end', () => console.log("Finished writing ZIP"))
-      archive.on('warning', (err) => console.log("Warning: ", err))
-      archive.on('error', (err) => console.log("Error: ", err))
+async function prepareInputsZip(inputsGlob, targetFile) {
+  const separatedInputGlobs = commaSeparated(inputsGlob);
+  core.debug("Got input file globs: " + separatedInputGlobs)
+  if (!areGlobsValid(separatedInputGlobs)) {
+    throw new Error("No globs specified for source/binary input files")
+  }
 
-      archive.pipe(output);
+  const inputFilesGlob = await buildGlobObject(separatedInputGlobs)
+  const output = fs.createWriteStream(targetFile);
+  const archive = archiver('zip');
+  archive.on('end', () => core.info("Finished writing ZIP"))
+  archive.on('warning', (err) => core.warning("Warning when writing ZIP: ", err))
+  archive.on('error', (err) => core.error("Error when writing ZIP: ", err))
 
-      let numWritten = 0
-      for await (const file of inputFilesGlob.globGenerator()) {
-        archive.file(file);
-        numWritten += 1
-      }
-      await archive.finalize()
-      return numWritten
-    })
+  archive.pipe(output);
+
+  let numWritten = 0
+  for await (const file of inputFilesGlob.globGenerator()) {
+    archive.file(file);
+    numWritten += 1
+  }
+  await archive.finalize()
+  return numWritten
 }
 
-function attachInputsZip(inputGlobs, formData, tmpDir) {
+async function attachInputsZip(inputGlobs, formData, tmpDir) {
   const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
-  return prepareInputsZip(inputGlobs, zipTarget)
-    .then((numFiles) => Synchronously(() => {
-      if (numFiles == 0) {
-        throw new Error("No files were matched by the source/binary glob(s)")
-      } else {
-        core.info(`Added ${numFiles} files`)
-      }
+  const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
+  if (numFiles == 0) {
+    throw new Error("No files were matched by the source/binary glob(s)")
+  } else {
+    core.info(`Added ${numFiles} files`)
+  }
 
-      formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
-    }))
+  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
 }
 
-function attachScanFiles(scanGlobs, formData) {
+async function attachScanFiles(scanGlobs, formData) {
   const separatedScanGlobs = commaSeparated(scanGlobs)
   core.debug("Got scan file globs: " + separatedScanGlobs)
 
   if (areGlobsValid(separatedScanGlobs)) {
-    return buildGlobObject(separatedScanGlobs)
-      .then(async (scanFilesGlob) => {
-        core.info("Searching with globs...")
-        let numWritten = 0
-        for await (const file of scanFilesGlob.globGenerator()) {
-          numWritten += 1
-          core.info('- Adding ' + file)
-          const name = path.basename(file)
-          formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
-        }
-        core.info(`Found and added ${numWritten} scan files`)
-      })
+    const scanFilesGlob = await buildGlobObject(separatedScanGlobs)
+    core.info("Searching with globs...")
+    let numWritten = 0
+    for await (const file of scanFilesGlob.globGenerator()) {
+      numWritten += 1
+      core.info('- Adding ' + file)
+      const name = path.basename(file)
+      formData.append(`${numWritten}-${name}`, fs.createReadStream(file))
+    }
+    core.info(`Found and added ${numWritten} scan files`)
   } else {
-    return Synchronously(() => core.info("(Scan files skipped as no globs were specified)"))
+    core.info("(Scan files skipped as no globs were specified)")
   }
 }
 
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
-  try {
-    const config = getConfig()
+  const config = getConfig()
 
-    const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
-    core.info("Checking connection to Code Dx...")
+  const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
+  core.info("Checking connection to Code Dx...")
 
-    const codedxVersion = await client.testConnection()
-    core.info("Confirmed - using Code Dx " + codedxVersion)
+  const codedxVersion = await client.testConnection()
+  core.info("Confirmed - using Code Dx " + codedxVersion)
 
-    core.info("Checking API key permissions...")
-    await client.validatePermissions(config.projectId)
-    core.info("Connection to Code Dx server is OK.")
+  core.info("Checking API key permissions...")
+  await client.validatePermissions(config.projectId)
+  core.info("Connection to Code Dx server is OK.")
 
-    const formData = new FormData()
-    
-    core.info("Preparing source/binaries ZIP...")
-    await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+  const formData = new FormData()
+  
+  core.info("Preparing source/binaries ZIP...")
+  await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
 
-    core.info("Adding scan files...")
-    await attachScanFiles(config.scanGlobs, formData)
+  core.info("Adding scan files...")
+  await attachScanFiles(config.scanGlobs, formData)
 
-    core.info("Uploading to Code Dx...")
-    const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
+  core.info("Uploading to Code Dx...")
+  const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
 
-    core.info("Started analysis #" + analysisId)
+  core.info("Started analysis #" + analysisId)
 
-    if (config.waitForCompletion) {
-      core.info("Waiting for job to finish...")
-      let lastStatus = null
-      do {
-        await wait(1000)
-        lastStatus = await client.checkJobStatus(jobId)
-      } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
+  if (config.waitForCompletion) {
+    core.info("Waiting for job to finish...")
+    let lastStatus = null
+    do {
+      await wait(1000)
+      lastStatus = await client.checkJobStatus(jobId)
+    } while (lastStatus != JobStatus.COMPLETED && lastStatus != JobStatus.FAILED)
 
-      if (lastStatus == JobStatus.COMPLETED) {
-        core.info("Analysis finished! Completed with status: " + lastStatus)
-      } else {
-        throw new Error("Analysis finished with non-complete status: " + lastStatus)
-      }
+    if (lastStatus == JobStatus.COMPLETED) {
+      core.info("Analysis finished! Completed with status: " + lastStatus)
+    } else {
+      throw new Error("Analysis finished with non-complete status: " + lastStatus)
     }
-  } catch (ex) {
-    throw ex
   }
 }
 
@@ -189,6 +173,10 @@ function parseError(e) {
     }
 }
 
+function rethrowError(err) {
+    throw parseError(err)
+}
+
 class CodeDxApiClient {
     constructor(baseUrl, apiKey, caCert) {
         const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
@@ -211,6 +199,8 @@ class CodeDxApiClient {
         })
     }
 
+    // WARNING: This logging will emit Header data, which contains the Code Dx API key. This should not be exposed and should only
+    //          be used for internal testing.
     useLogging() {
         this.anonymousHttp.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
         this.http.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
@@ -219,58 +209,57 @@ class CodeDxApiClient {
         this.http.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
     }
 
-    testConnection() {
-        return this.anonymousHttp.get('/x/system-info')
-            .then(response => new Promise((resolve) => {
-                if (typeof response.data != 'object') {
-                    throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
-                }
-        
-                const expectedFields = ['version', 'date']
-                const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
-                if (unexpectedFields.length > 0) {
-                    throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this a Code Dx instance?`)
-                }
+    async testConnection() {
+        const response = await this.anonymousHttp.get('/x/system-info').catch(rethrowError)
 
-                resolve(response.data.version)
-            }))
-            .catch(e => { throw parseError(e) })
+        if (typeof response.data != 'object') {
+            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
+        }
+
+        const expectedFields = ['version', 'date']
+        const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
+        if (unexpectedFields.length > 0) {
+            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this a Code Dx instance?`)
+        }
+
+        return response.data.version
     }
 
-    validatePermissions(projectId) {
-        const neededPermissions = [
-            `analysis:create:${projectId}`
+    async validatePermissions(projectId) {
+        const cleanNeededPermissions = [
+            'analysis:create'
         ]
 
-        return this.http.post('/x/check-permissions', neededPermissions)
-            .catch(e => {
-                if (axios.isAxiosError(e) && e.response.status == 403) {
-                    throw new Error("Permissions check responded with HTTP 403, is the API key valid?")
-                } else {
-                    throw e
-                }
+        const neededPermissions = cleanNeededPermissions.map(p => `${p}:${projectId}`)
+
+        const response = await this.http.post('/x/check-permissions', neededPermissions).catch(e => {
+            if (axios.isAxiosError(e) && e.response.status == 403) {
+                throw new Error("Permissions check responded with HTTP 403, is the API key valid?")
+            } else {
+                throw parseError(e)
+            }
+        })
+        
+        const permissions = response.data
+        const missingPermissions = neededPermissions.filter(p => !permissions[p])
+        if (missingPermissions.length > 0) {
+            const cleanMissingPermissions = missingPermissions.map(p => {
+                const parts = p.split(':')
+                return parts.slice(0, -1).join(':')
             })
-            .then(response => new Promise(resolve => {
-                const permissions = response.data
-                const missingPermissions = neededPermissions.filter(p => !permissions[p])
-                if (missingPermissions.length > 0) {
-                    const summary = missingPermissions.join(', ')
-                    throw new Error("The following permissions were missing for the given API Key: " + summary)
-                }
-                resolve()
-            }))
+            const summary = cleanMissingPermissions.join(', ')
+            throw new Error("The following permissions were missing for the given API Key: " + summary)
+        }
     }
 
-    runAnalysis(projectId, formData) {
-        return this.http.post(`/api/projects/${projectId}/analysis`, formData, { headers: formData.getHeaders() })
-            .catch(ex => { throw parseError(ex) })
-            .then(response => new Promise(resolve => resolve(response.data)))
+    async runAnalysis(projectId, formData) {
+        const response = await this.http.post(`/api/projects/${projectId}/analysis`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
+        return response.data
     }
 
-    checkJobStatus(jobId) {
-        return this.http.get('/api/jobs/' + jobId)
-            .catch(ex => { throw parseError(ex) })
-            .then(result => new Promise(resolve => resolve(result.data.status)))
+    async checkJobStatus(jobId) {
+        const response = await this.http.get('/api/jobs/' + jobId).catch(rethrowError)
+        return response.data.status
     }
 }
 
