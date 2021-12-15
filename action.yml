@@ -1,4 +1,4 @@
-name: 'Code Dx: Start Analysis'
+name: 'Code Dx Analysis'
 description: 'Analyze your source code and binaries with Code Dx'
 inputs:
   # main config options
