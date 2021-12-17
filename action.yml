@@ -28,6 +28,8 @@ inputs:
     required: false
   dry-run:
     description: 'whether to submit an analysis (false/undefined), or only test the connection and credentials (true). an error in validation will fail the build.'
+    required: false
+    default: false
 runs:
   using: 'node12'
   main: 'dist/index.js'
