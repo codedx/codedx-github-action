@@ -62,7 +62,13 @@ class CodeDxApiClient {
     }
 
     async testConnection() {
-        const response = await this.anonymousHttp.get('/x/system-info').catch(rethrowError)
+        const response = await this.anonymousHttp.get('/x/system-info').catch(e => {
+            if (axios.isAxiosError(e) && e.response) {
+                throw new Error(`Expected OK response, got ${e.response.status}. Is this a Code Dx instance?`)
+            } else {
+                throw e
+            }
+        })
 
         if (typeof response.data != 'object') {
             throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
