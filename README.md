@@ -11,7 +11,7 @@ The Action can optionally wait for analysis completion, writing the final status
 The workflow will be set to fail if:
 
 - The source/binaries glob(s) fail to match any files
-- There are any errors when contacting Code Dx
+- There are any errors when contacting your Code Dx server
 - The analysis ends in failure
 
 ## Requirements
