@@ -26,6 +26,8 @@ inputs:
   ca-cert:
     description: 'a custom CA cert to use for HTTPS requests to Code Dx'
     required: false
+  dry-run:
+    description: 'whether to submit an analysis (false/undefined), or only test the connection and credentials (true). an error in validation will fail the build.'
 runs:
   using: 'node12'
   main: 'dist/index.js'

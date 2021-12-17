@@ -1,5 +1,17 @@
 const core = require('@actions/core');
 
+function isYamlTrue(value) {
+    value = value.toLowerCase().trim()
+    return ["yes", "on", "true"].indexOf(value) >= 0
+}
+
+function fixBoolean(target, field) {
+    const value = target[field]
+    if (typeof value == 'string') {
+        target[field] = isYamlTrue(value)
+    }
+}
+
 class Config {
     constructor() {
         this.serverUrl = core.getInput('server-url', { required: true })
@@ -10,20 +22,15 @@ class Config {
 
         this.waitForCompletion = core.getInput('wait-for-completion')
         this.caCert = core.getInput('ca-cert')
+        this.dryRun = core.getInput('dry-run')
 
         // debug vars
         this.tmpDir = ""
     }
 
     sanitize() {
-        function isYamlTrue(value) {
-            value = value.toLowerCase().trim()
-            return ["yes", "on", "true"].indexOf(value) >= 0
-        }
-
-        if (typeof this.waitForCompletion == 'string') {
-            this.waitForCompletion = isYamlTrue(this.waitForCompletion)
-        }
+        fixBoolean(this, 'waitForCompletion')
+        fixBoolean(this, 'dryRun')
 
         if (typeof this.projectId != 'number') {
             try {

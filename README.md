@@ -32,6 +32,7 @@ The workflow will be set to fail if:
 | `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                              | `undefined`   | No       |
 | `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                              | `false`       | No       |
 | `ca-cert`                  | A custom CA cert to use for HTTPS connections to Code Dx                                                 | `undefined`   | No       |
+| `dry-run`                  | Whether to submit an analysis (false/undefined) or only test the connection and credentials (true)       | `undefined`   | No       |
 
 ## Sample Workflow
 

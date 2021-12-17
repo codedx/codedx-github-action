@@ -105,6 +105,11 @@ module.exports = async function run() {
   await client.validatePermissions(config.projectId)
   core.info("Connection to Code Dx server is OK.")
 
+  if (config.dryRun) {
+    core.info("dry-run is enabled, exiting without analysis")
+    return
+  }
+
   const formData = new FormData()
   
   core.info("Preparing source/binaries ZIP...")
