@@ -167,10 +167,6 @@ const _ = __nccwpck_require__(3571)
 const AxiosLogger = __nccwpck_require__(7370)
 const https = __nccwpck_require__(7211)
 
-AxiosLogger.setGlobalConfig({
-    headers: true
-})
-
 function parseError(e) {
     if (axios.isAxiosError(e) && e.response) {
         let msg = `${e.response.statusText} (HTTP ${e.response.status})`
@@ -218,6 +214,10 @@ class CodeDxApiClient {
     // WARNING: This logging will emit Header data, which contains the Code Dx API key. This should not be exposed and should only
     //          be used for internal testing.
     useLogging() {
+        AxiosLogger.setGlobalConfig({
+            headers: true
+        })
+
         this.anonymousHttp.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
         this.http.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
 
