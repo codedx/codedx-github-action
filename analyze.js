@@ -34,6 +34,16 @@ function buildGlobObject(globsArray) {
   return glob.create(globsArray.join('\n'))
 }
 
+function makeRelative(workingDir, path) {
+  if (path.indexOf(workingDir) == 0) {
+    let relative = path.substr(workingDir.length)
+    if (relative[0] == '/') relative = relative.substr(1)
+    return relative
+  } else {
+    return path
+  }
+}
+
 async function prepareInputsZip(inputsGlob, targetFile) {
   const separatedInputGlobs = commaSeparated(inputsGlob);
   core.debug("Got input file globs: " + separatedInputGlobs)
@@ -51,8 +61,9 @@ async function prepareInputsZip(inputsGlob, targetFile) {
   archive.pipe(output);
 
   let numWritten = 0
+  const workingDir = process.cwd()
   for await (const file of inputFilesGlob.globGenerator()) {
-    archive.file(file);
+    archive.file(makeRelative(workingDir, file))
     numWritten += 1
   }
   await archive.finalize()
