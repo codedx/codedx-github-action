@@ -129,7 +129,7 @@ module.exports = async function run() {
     if (lastStatus == JobStatus.COMPLETED) {
       core.info("Analysis finished! Completed with status: " + lastStatus)
     } else {
-      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See Code Dx logs for more details.`)
+      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See Code Dx server logs/visual log for more details.`)
     }
   }
 }
