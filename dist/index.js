@@ -38,7 +38,7 @@ function areGlobsValid(globsArray) {
 }
 
 function buildGlobObject(globsArray) {
-  return glob.create(globsArray.join('\n'))
+  return glob.create(globsArray.join('\n'), { matchDirectories: false })
 }
 
 function makeRelative(workingDir, path) {
@@ -62,15 +62,18 @@ async function prepareInputsZip(inputsGlob, targetFile) {
   const output = fs.createWriteStream(targetFile);
   const archive = archiver('zip');
   archive.on('end', () => core.info("Finished writing ZIP"))
-  archive.on('warning', (err) => core.warning("Warning when writing ZIP: ", err))
-  archive.on('error', (err) => core.error("Error when writing ZIP: ", err))
+  archive.on('warning', (err) => core.warning("Warning when writing ZIP: " + err))
+  archive.on('error', (err) => core.error("Error when writing ZIP: " + err))
 
   archive.pipe(output);
 
   let numWritten = 0
   const workingDir = process.cwd()
   for await (const file of inputFilesGlob.globGenerator()) {
-    archive.file(makeRelative(workingDir, file))
+    const relPath = makeRelative(workingDir, file)
+    if (file == targetFile || relPath == targetFile) continue
+    
+    archive.file(relPath)
     numWritten += 1
   }
   await archive.finalize()

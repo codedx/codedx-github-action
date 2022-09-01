@@ -65,7 +65,7 @@ async function prepareInputsZip(inputsGlob, targetFile) {
   for await (const file of inputFilesGlob.globGenerator()) {
     const relPath = makeRelative(workingDir, file)
     if (file == targetFile || relPath == targetFile) continue
-
+    
     archive.file(relPath)
     numWritten += 1
   }
