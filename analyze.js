@@ -55,8 +55,8 @@ async function prepareInputsZip(inputsGlob, targetFile) {
   const output = fs.createWriteStream(targetFile);
   const archive = archiver('zip');
   archive.on('end', () => core.info("Finished writing ZIP"))
-  archive.on('warning', (err) => core.warning("Warning when writing ZIP: ", err))
-  archive.on('error', (err) => core.error("Error when writing ZIP: ", err))
+  archive.on('warning', (err) => core.warning("Warning when writing ZIP: " + err))
+  archive.on('error', (err) => core.error("Error when writing ZIP: " + err))
 
   archive.pipe(output);
 
