@@ -31,7 +31,7 @@ jobs:
           ./pmd-bin-6.38.0/bin/run.sh pmd -d webgoat -f sarif -R rulesets/java/quickstart.xml -r pmd-sarif.json -failOnViolation false
       
       - name: Code Dx Upload
-        uses: 'codedx/codedx-github-action@d49697a58cd249788df165fa0f442dd15aa6144b'
+        uses: './codedx-action'
         with:
           server-url: ${{ secrets.CDX_SERVER_URL }}
           api-key: ${{ secrets.CDX_API_KEY }}
