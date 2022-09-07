@@ -31,7 +31,7 @@ function areGlobsValid(globsArray) {
 }
 
 function buildGlobObject(globsArray) {
-  return glob.create(globsArray.join('\n'))
+  return glob.create(globsArray.join('\n'), { matchDirectories: false })
 }
 
 function makeRelative(workingDir, path) {
@@ -55,15 +55,18 @@ async function prepareInputsZip(inputsGlob, targetFile) {
   const output = fs.createWriteStream(targetFile);
   const archive = archiver('zip');
   archive.on('end', () => core.info("Finished writing ZIP"))
-  archive.on('warning', (err) => core.warning("Warning when writing ZIP: ", err))
-  archive.on('error', (err) => core.error("Error when writing ZIP: ", err))
+  archive.on('warning', (err) => core.warning("Warning when writing ZIP: " + err))
+  archive.on('error', (err) => core.error("Error when writing ZIP: " + err))
 
   archive.pipe(output);
 
   let numWritten = 0
   const workingDir = process.cwd()
   for await (const file of inputFilesGlob.globGenerator()) {
-    archive.file(makeRelative(workingDir, file))
+    const relPath = makeRelative(workingDir, file)
+    if (file == targetFile || relPath == targetFile) continue
+    
+    archive.file(relPath)
     numWritten += 1
   }
   await archive.finalize()
@@ -74,12 +77,11 @@ async function attachInputsZip(inputGlobs, formData, tmpDir) {
   const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
   const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
   if (numFiles == 0) {
-    throw new Error("No files were matched by the source/binary glob(s)")
+    core.warning("No files were matched by the 'source-and-binaries-glob' values, skipping source/binaries ZIP attachment")
   } else {
     core.info(`Added ${numFiles} files`)
+    formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
   }
-
-  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
 }
 
 async function attachScanFiles(scanGlobs, formData) {
@@ -123,11 +125,19 @@ module.exports = async function run() {
 
   const formData = new FormData()
   
-  core.info("Preparing source/binaries ZIP...")
-  await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+  if (config.inputGlobs) {
+    core.info("Preparing source/binaries ZIP...")
+    await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+  } else {
+    core.info("Source/binary inputs glob not specified, skipping ZIP creation")
+  }
 
-  core.info("Adding scan files...")
-  await attachScanFiles(config.scanGlobs, formData)
+  if (config.scanGlobs) {
+    core.info("Adding scan files...")
+    await attachScanFiles(config.scanGlobs, formData)
+  } else {
+    core.info("Scan files glob not specified, skipping scan file attachment")
+  }
 
   core.info("Uploading to Code Dx...")
   const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
