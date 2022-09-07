@@ -84,12 +84,11 @@ async function attachInputsZip(inputGlobs, formData, tmpDir) {
   const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
   const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
   if (numFiles == 0) {
-    throw new Error("No files were matched by the source/binary glob(s)")
+    core.warning("No files were matched by the 'source-and-binaries-glob' values, skipping source/binaries ZIP attachment")
   } else {
     core.info(`Added ${numFiles} files`)
+    formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
   }
-
-  formData.append('source-and-binaries.zip', fs.createReadStream(zipTarget))
 }
 
 async function attachScanFiles(scanGlobs, formData) {
