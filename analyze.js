@@ -126,11 +126,19 @@ module.exports = async function run() {
 
   const formData = new FormData()
   
-  core.info("Preparing source/binaries ZIP...")
-  await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+  if (config.inputGlobs) {
+    core.info("Preparing source/binaries ZIP...")
+    await attachInputsZip(config.inputGlobs, formData, config.tmpDir)
+  } else {
+    core.info("Source/binary inputs glob not specified, skipping ZIP creation")
+  }
 
-  core.info("Adding scan files...")
-  await attachScanFiles(config.scanGlobs, formData)
+  if (!config.scanGlobs) {
+    core.info("Adding scan files...")
+    await attachScanFiles(config.scanGlobs, formData)
+  } else {
+    core.info("Scan files glob not specified, skipping scan file attachment")
+  }
 
   core.info("Uploading to Code Dx...")
   const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)

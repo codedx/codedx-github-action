@@ -17,7 +17,7 @@ class Config {
         this.serverUrl = core.getInput('server-url', { required: true })
         this.apiKey = core.getInput('api-key', { required: true })
         this.projectId = core.getInput('project-id', { required: true })
-        this.inputGlobs = core.getInput('source-and-binaries-glob', { required: true })
+        this.inputGlobs = core.getInput('source-and-binaries-glob')
         this.scanGlobs = core.getInput('tool-outputs-glob')
 
         this.waitForCompletion = core.getInput('wait-for-completion')
@@ -31,6 +31,9 @@ class Config {
     sanitize() {
         fixBoolean(this, 'waitForCompletion')
         fixBoolean(this, 'dryRun')
+        fixBoolean(this, 'requireInputFiles')
+
+        this.inputGlobs = this.inputGlobs.trim()
 
         if (typeof this.projectId != 'number') {
             try {

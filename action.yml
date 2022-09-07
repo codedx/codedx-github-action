@@ -12,7 +12,7 @@ inputs:
     description: 'the ID of a project (an integer) created in Code Dx'
     required: true
   source-and-binaries-glob:
-    description: 'a file glob matching source and binary files (accepts multiple comma-separated globs)'
+    description: 'a file glob matching source and binary files (accepts multiple comma-separated globs). if not set, no source/binary files will be sent to Code Dx'
     required: true
   tool-outputs-glob:
     description: 'a file glob matching output files (ie scan results) from an analysis tool (accepts multiple comma-separated globs)'  
