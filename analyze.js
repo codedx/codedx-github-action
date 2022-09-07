@@ -133,7 +133,7 @@ module.exports = async function run() {
     core.info("Source/binary inputs glob not specified, skipping ZIP creation")
   }
 
-  if (!config.scanGlobs) {
+  if (config.scanGlobs) {
     core.info("Adding scan files...")
     await attachScanFiles(config.scanGlobs, formData)
   } else {
