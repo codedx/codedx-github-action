@@ -12,7 +12,7 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -36,7 +36,6 @@ jobs:
           server-url: ${{ secrets.CDX_SERVER_URL }}
           api-key: ${{ secrets.CDX_API_KEY }}
           project-id: ${{ secrets.CDX_PROJECT_ID }}
-          source-and-binaries-glob: 'webgoat/**'
           tool-outputs-glob: 'pmd-sarif.json'
           wait-for-completion: false
           ca-cert: ${{ secrets.CDX_CERT }}
