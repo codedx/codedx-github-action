@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Code Dx Upload
-        uses: 'codedx/codedx-github-action@v1.0'
+        uses: 'codedx/codedx-github-action@v1.1'
         with:
           server-url: ${{ secrets.CDX_SERVER_URL }}
           api-key: ${{ secrets.CDX_API_KEY }}
