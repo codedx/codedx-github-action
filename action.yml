@@ -11,6 +11,12 @@ inputs:
   project-id:
     description: 'the ID of a project (an integer) created in Code Dx'
     required: true
+  base-branch-name:
+    description: 'the parent branch name of a project created in Code Dx'
+    required: false
+  target-branch-name:
+    description: 'the target branch name of a project created in Code Dx'
+    required: false
   source-and-binaries-glob:
     description: 'a file glob matching source and binary files (accepts multiple comma-separated globs). if not set, no source/binary files will be sent to Code Dx'
     required: true

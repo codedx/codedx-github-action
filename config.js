@@ -17,6 +17,8 @@ class Config {
         this.serverUrl = core.getInput('server-url', { required: true })
         this.apiKey = core.getInput('api-key', { required: true })
         this.projectId = core.getInput('project-id', { required: true })
+        this.baseBranchName = core.getInput('base-branch-name')
+        this.targetBranchName = core.getInput('target-branch-name')
         this.inputGlobs = core.getInput('source-and-binaries-glob')
         this.scanGlobs = core.getInput('tool-outputs-glob')
 

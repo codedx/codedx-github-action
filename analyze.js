@@ -4,7 +4,7 @@ const _ = require('underscore')
 const archiver = require('archiver')
 const fs = require('fs')
 const FormData = require('form-data')
-const CodeDxApiClient = require('./codedx')
+const codeDxClient = require('./codedx')
 const path = require('path')
 
 const getConfig = require('./config').get
@@ -104,11 +104,47 @@ async function attachScanFiles(scanGlobs, formData) {
   }
 }
 
+async function validateBranches(branches, config) {
+  const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
+
+  // If target branch is not defined, use the default branch. This also ensures even if
+  // base branch is defined, the default branch is not created as a child of the base branch
+  if (typeof config.targetBranchName == 'undefined') {
+    core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
+    config.targetBranchName = defaultBranch
+    config.baseBranchName = undefined
+  }
+
+  const baseBranchPresent = codeDxClient.checkIfBranchPresent(branches, config.baseBranchName)
+  const targetBranchPresent = codeDxClient.checkIfBranchPresent(branches, config.targetBranchName)
+
+  if (targetBranchPresent) {
+    core.info("Using existing Code Dx branch: " + config.targetBranchName);
+    // Not necessary, base branch is currently ignored in the backend if the target
+    // branch already exists. just setting to null to safeguard in case of future changes
+    config.baseBranchName = undefined
+  } else {
+    // Base branch is not defined; throw error
+    if (typeof config.baseBranchName == 'undefined') {
+      throw new Error("A parent branch must be specified when using a new target branch");
+    }
+
+    // Base branch is defined but is not present; cannot create target branch, so throw error
+    if (!baseBranchPresent) {
+      throw new Error("The specified parent branch does not exist: " + config.baseBranchName);
+    }
+
+    // If base branch is defined and present, create the target branch off the base
+    core.info(`Analysis will create a new branch named '${config.targetBranchName}' based on the branch '${config.baseBranchName}'`);
+  }
+}
+
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   const config = getConfig()
+  const MinimumVersionForBranching = '2022.4.3'
 
-  const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
+  const client = new codeDxClient.CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
   core.info("Checking connection to Code Dx...")
 
   const codedxVersion = await client.testConnection()
@@ -117,6 +153,23 @@ module.exports = async function run() {
   core.info("Checking API key permissions...")
   await client.validatePermissions(config.projectId)
   core.info("Connection to Code Dx server is OK.")
+
+  core.info("Validating branch selection...")
+  // First check if the Code Dx version being used supports branching
+  if (codedxVersion.localeCompare(MinimumVersionForBranching) < 0) {
+    core.info(
+        "The connected Code Dx server with version " + codedxVersion + " does not support project branches. " +
+        "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
+        "branch options will be ignored."
+    )
+    // Set both branch configs to undefined since we will be ignoring them
+    config.baseBranchName = undefined
+    config.targetBranchName = undefined
+  } else {
+    const branches = await client.getProjectBranches(config.projectId)
+    await validateBranches(branches, config)
+    core.info("Branch selection is OK.")
+  }
 
   if (config.dryRun) {
     core.info("dry-run is enabled, exiting without analysis")
@@ -140,7 +193,7 @@ module.exports = async function run() {
   }
 
   core.info("Uploading to Code Dx...")
-  const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
+  const { analysisId, jobId } = await client.runAnalysis(config.projectId, config.baseBranchName, config.targetBranchName, formData)
 
   core.info("Started analysis #" + analysisId)
 

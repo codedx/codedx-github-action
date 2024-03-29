@@ -25,6 +25,35 @@ function rethrowError(err) {
     throw parseError(err)
 }
 
+function checkIfBranchPresent(branches, branchName) {
+    let result = false
+    branches.forEach(branch => {
+        if (branch.name.includes(branchName)) {
+            result = true
+        }
+    })
+    return result
+}
+
+function buildQueryParams(branches, baseBranchName, targetBranchName) {
+    const baseBranchPresent = checkIfBranchPresent(branches, baseBranchName)
+    const targetBranchPresent = checkIfBranchPresent(branches, targetBranchName)
+
+    // If base branch is not defined, OR, base branch is present but target branch isn't, add the base branch name in the query param
+    const baseBranchPart = ((typeof baseBranchName == 'undefined') || (baseBranchPresent && targetBranchPresent)) ? "" : `;branch=${baseBranchName}`
+    // If target branch is not defined, no need to add the branch name to the query param. It will work on the default branch
+    const targetBranchPart = (typeof targetBranchName == 'undefined') ? "analysis" : `analysis?branchName=${targetBranchName}`
+
+    return baseBranchPart + "/" + targetBranchPart
+}
+
+class CodeDxBranch {
+    constructor(name, isDefault) {
+        this.name = name
+        this.isDefault = isDefault
+    }
+}
+
 class CodeDxApiClient {
     constructor(baseUrl, apiKey, caCert) {
         const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
@@ -110,8 +139,18 @@ class CodeDxApiClient {
         }
     }
 
-    async runAnalysis(projectId, formData) {
-        const response = await this.http.post(`/api/projects/${projectId}/analysis`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
+    async getProjectBranches(projectId) {
+        const branchesResponse = await this.http.get(`/x/projects/${projectId}/branches`).catch(rethrowError)
+        return branchesResponse.data.map(branchData => {
+            return new CodeDxBranch(branchData.name, branchData.isDefault, branchData.id)
+        })
+    }
+
+    async runAnalysis(projectId, baseBranchName, targetBranchName, formData) {
+        const branches = await this.getProjectBranches(projectId)
+        const queryParams = await buildQueryParams(branches, baseBranchName, targetBranchName)
+
+        const response = await this.http.post(`/api/projects/${projectId}${queryParams}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
         return response.data
     }
 
@@ -121,4 +160,7 @@ class CodeDxApiClient {
     }
 }
 
-module.exports = CodeDxApiClient
+module.exports = {
+    CodeDxApiClient,
+    checkIfBranchPresent
+}
