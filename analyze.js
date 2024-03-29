@@ -4,7 +4,7 @@ const _ = require('underscore')
 const archiver = require('archiver')
 const fs = require('fs')
 const FormData = require('form-data')
-const codeDxClient = require('./codedx')
+const srmClient = require('./srm')
 const path = require('path')
 
 const getConfig = require('./config').get
@@ -74,7 +74,7 @@ async function prepareInputsZip(inputsGlob, targetFile) {
 }
 
 async function attachInputsZip(inputGlobs, formData, tmpDir) {
-  const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
+  const zipTarget = path.join(tmpDir, "srm-inputfiles.zip")
   const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
   if (numFiles == 0) {
     core.warning("No files were matched by the 'source-and-binaries-glob' values, skipping source/binaries ZIP attachment")
@@ -115,11 +115,11 @@ async function validateBranches(branches, config) {
     config.baseBranchName = undefined
   }
 
-  const baseBranchPresent = codeDxClient.checkIfBranchPresent(branches, config.baseBranchName)
-  const targetBranchPresent = codeDxClient.checkIfBranchPresent(branches, config.targetBranchName)
+  const baseBranchPresent = srmClient.checkIfBranchPresent(branches, config.baseBranchName)
+  const targetBranchPresent = srmClient.checkIfBranchPresent(branches, config.targetBranchName)
 
   if (targetBranchPresent) {
-    core.info("Using existing Code Dx branch: " + config.targetBranchName);
+    core.info("Using existing SRM branch: " + config.targetBranchName);
     // Not necessary, base branch is currently ignored in the backend if the target
     // branch already exists. just setting to null to safeguard in case of future changes
     config.baseBranchName = undefined
@@ -144,21 +144,21 @@ module.exports = async function run() {
   const config = getConfig()
   const MinimumVersionForBranching = '2022.4.3'
 
-  const client = new codeDxClient.CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
-  core.info("Checking connection to Code Dx...")
+  const client = new srmClient.SrmApiClient(config.serverUrl, config.apiKey, config.caCert)
+  core.info("Checking connection to SRM...")
 
-  const codedxVersion = await client.testConnection()
-  core.info("Confirmed - using Code Dx " + codedxVersion)
+  const srmVersion = await client.testConnection()
+  core.info("Confirmed - using SRM " + srmVersion)
 
   core.info("Checking API key permissions...")
   await client.validatePermissions(config.projectId)
-  core.info("Connection to Code Dx server is OK.")
+  core.info("Connection to SRM server is OK.")
 
   core.info("Validating branch selection...")
-  // First check if the Code Dx version being used supports branching
-  if (codedxVersion.localeCompare(MinimumVersionForBranching) < 0) {
+  // First check if the SRM version being used supports branching
+  if (srmVersion.localeCompare(MinimumVersionForBranching) < 0) {
     core.info(
-        "The connected Code Dx server with version " + codedxVersion + " does not support project branches. " +
+        "The connected SRM server with version " + srmVersion + " does not support project branches. " +
         "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
         "branch options will be ignored."
     )
@@ -192,7 +192,7 @@ module.exports = async function run() {
     core.info("Scan files glob not specified, skipping scan file attachment")
   }
 
-  core.info("Uploading to Code Dx...")
+  core.info("Uploading to SRM...")
   const { analysisId, jobId } = await client.runAnalysis(config.projectId, config.baseBranchName, config.targetBranchName, formData)
 
   core.info("Started analysis #" + analysisId)
@@ -208,7 +208,7 @@ module.exports = async function run() {
     if (lastStatus == JobStatus.COMPLETED) {
       core.info("Analysis finished! Completed with status: " + lastStatus)
     } else {
-      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See Code Dx server logs/visual log for more details.`)
+      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See SRM server logs/visual log for more details.`)
     }
   }
 }

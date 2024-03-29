@@ -1,24 +1,24 @@
-name: 'Code Dx Analysis'
-description: 'Analyze your source code and binaries with Code Dx'
+name: 'SRM Analysis'
+description: 'Analyze your source code and binaries with SRM'
 inputs:
   # main config options
   server-url:
-    description: 'the URL for the Code Dx server (typically ends with `/codedx`)'
+    description: 'the URL for the SRM server (typically ends with `/codedx`)'
     required: true
   api-key:
-    description: 'an API key or Personal Access Token (PAT) to use when connecting to Code Dx'
+    description: 'an API key or Personal Access Token (PAT) to use when connecting to SRM'
     required: true
   project-id:
-    description: 'the ID of a project (an integer) created in Code Dx'
+    description: 'the ID of a project (an integer) created in SRM'
     required: true
   base-branch-name:
-    description: 'the parent branch name of a project created in Code Dx'
+    description: 'the parent branch name of a project created in SRM'
     required: false
   target-branch-name:
-    description: 'the target branch name of a project created in Code Dx'
+    description: 'the target branch name of a project created in SRM'
     required: false
   source-and-binaries-glob:
-    description: 'a file glob matching source and binary files (accepts multiple comma-separated globs). if not set, no source/binary files will be sent to Code Dx'
+    description: 'a file glob matching source and binary files (accepts multiple comma-separated globs). if not set, no source/binary files will be sent to SRM'
     required: true
   tool-outputs-glob:
     description: 'a file glob matching output files (ie scan results) from an analysis tool (accepts multiple comma-separated globs)'  
@@ -30,7 +30,7 @@ inputs:
     required: false
     default: false
   ca-cert:
-    description: 'a custom CA cert to use for HTTPS requests to Code Dx'
+    description: 'a custom CA cert to use for HTTPS requests to SRM'
     required: false
   dry-run:
     description: 'whether to submit an analysis (false/undefined), or only test the connection and credentials (true). an error in validation will fail the build.'

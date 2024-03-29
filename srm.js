@@ -47,14 +47,14 @@ function buildQueryParams(branches, baseBranchName, targetBranchName) {
     return baseBranchPart + "/" + targetBranchPart
 }
 
-class CodeDxBranch {
+class SrmBranch {
     constructor(name, isDefault) {
         this.name = name
         this.isDefault = isDefault
     }
 }
 
-class CodeDxApiClient {
+class SrmApiClient {
     constructor(baseUrl, apiKey, caCert) {
         const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
 
@@ -76,7 +76,7 @@ class CodeDxApiClient {
         })
     }
 
-    // WARNING: This logging will emit Header data, which contains the Code Dx API key. This should not be exposed and should only
+    // WARNING: This logging will emit Header data, which contains the SRM API key. This should not be exposed and should only
     //          be used for internal testing.
     useLogging() {
         AxiosLogger.setGlobalConfig({
@@ -93,20 +93,20 @@ class CodeDxApiClient {
     async testConnection() {
         const response = await this.anonymousHttp.get('/x/system-info').catch(e => {
             if (axios.isAxiosError(e) && e.response) {
-                throw new Error(`Expected OK response, got ${e.response.status}. Is this a Code Dx instance?`)
+                throw new Error(`Expected OK response, got ${e.response.status}. Is this an SRM instance?`)
             } else {
                 throw e
             }
         })
 
         if (typeof response.data != 'object') {
-            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
+            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this an SRM instance?`)
         }
 
         const expectedFields = ['version', 'date']
         const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
         if (unexpectedFields.length > 0) {
-            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this a Code Dx instance?`)
+            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this an SRM instance?`)
         }
 
         return response.data.version
@@ -142,7 +142,7 @@ class CodeDxApiClient {
     async getProjectBranches(projectId) {
         const branchesResponse = await this.http.get(`/x/projects/${projectId}/branches`).catch(rethrowError)
         return branchesResponse.data.map(branchData => {
-            return new CodeDxBranch(branchData.name, branchData.isDefault, branchData.id)
+            return new SrmBranch(branchData.name, branchData.isDefault, branchData.id)
         })
     }
 
@@ -161,6 +161,6 @@ class CodeDxApiClient {
 }
 
 module.exports = {
-    CodeDxApiClient,
+    SrmApiClient,
     checkIfBranchPresent
 }
