@@ -26,32 +26,10 @@ function rethrowError(err) {
 }
 
 function checkIfBranchPresent(branches, branchName) {
-    let result = false
-    branches.forEach(branch => {
-        if (branch.name.includes(branchName)) {
-            result = true
-        }
-    })
-    return result
-}
-
-function buildQueryParams(branches, baseBranchName, targetBranchName) {
-    const baseBranchPresent = checkIfBranchPresent(branches, baseBranchName)
-    const targetBranchPresent = checkIfBranchPresent(branches, targetBranchName)
-
-    // If base branch is not defined, OR, base branch is present but target branch isn't, add the base branch name in the query param
-    const baseBranchPart = ((typeof baseBranchName == 'undefined') || (baseBranchPresent && targetBranchPresent)) ? "" : `;branch=${baseBranchName}`
-    // If target branch is not defined, no need to add the branch name to the query param. It will work on the default branch
-    const targetBranchPart = (typeof targetBranchName == 'undefined') ? "analysis" : `analysis?branchName=${targetBranchName}`
-
-    return baseBranchPart + "/" + targetBranchPart
-}
-
-class SrmBranch {
-    constructor(name, isDefault) {
-        this.name = name
-        this.isDefault = isDefault
+    for (const branch of branches) {
+        if (branch.name == branchName) return true
     }
+    return false
 }
 
 class SrmApiClient {
@@ -141,16 +119,20 @@ class SrmApiClient {
 
     async getProjectBranches(projectId) {
         const branchesResponse = await this.http.get(`/x/projects/${projectId}/branches`).catch(rethrowError)
-        return branchesResponse.data.map(branchData => {
-            return new SrmBranch(branchData.name, branchData.isDefault, branchData.id)
-        })
+        return branchesResponse.data
     }
 
     async runAnalysis(projectId, baseBranchName, targetBranchName, formData) {
-        const branches = await this.getProjectBranches(projectId)
-        const queryParams = await buildQueryParams(branches, baseBranchName, targetBranchName)
+        const baseBranchPresent = !!baseBranchName
+        const targetBranchPresent = !!targetBranchName
 
-        const response = await this.http.post(`/api/projects/${projectId}${queryParams}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
+        // If base branch is not defined, OR, base branch is present but target branch isn't, add the base branch name in the project URL part
+        const projectUrlPart = ((!baseBranchName) || (baseBranchPresent && targetBranchPresent)) ? "" : `;branch=${baseBranchName}`
+
+        // If target branch is not defined, no need to add the branch name to the query param. It will work on the default branch
+        const queryParamsPart = (!targetBranchName) ? "analysis" : `analysis?branchName=${targetBranchName}`
+
+        const response = await this.http.post(`/api/projects/${projectId}${projectUrlPart}/${queryParamsPart}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
         return response.data
     }
 

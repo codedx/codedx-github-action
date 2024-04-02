@@ -1,6 +1,6 @@
 # GitHub Action for SRM
 
-This GitHub action can be used to push source code, binaries, and scan results to an [SRM](https://codedx.com) instance from within a GitHub workflow; source and binaries are automatically scanned by SRM using its built-in analysis tools.
+This GitHub action can be used to push source code, binaries, and scan results to an [SRM](https://www.synopsys.com/software-integrity/software-risk-manager.html) instance from within a GitHub workflow; source and binaries are automatically scanned by SRM using its built-in analysis tools.
 
 ## Features and Behavior
 
@@ -28,6 +28,8 @@ The workflow will be set to fail if:
 | `server-url`               | The URL for the SRM server (typically ends with `/codedx`)                                           |               | Yes      |
 | `api-key`                  | An API Key or Personal Access Token to use when connecting to SRM                                    |               | Yes      |
 | `project-id`               | The ID of a project (an integer) created in SRM                                                      |               | Yes      |
+| `base-branch-name`         | The parent branch name of a project created in SRM                                                   | `undefined`   | No       |
+| `target-branch-name`       | The target branch name of a project created in SRM                                                   | `undefined`   | No       |
 | `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to SRM | `undefined`   | No       |
 | `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                              | `undefined`   | No       |
 | `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                              | `false`       | No       |

@@ -4,7 +4,7 @@ const _ = require('underscore')
 const archiver = require('archiver')
 const fs = require('fs')
 const FormData = require('form-data')
-const srmClient = require('./srm')
+const { SrmApiClient, checkIfBranchPresent } = require('./srm')
 const path = require('path')
 
 const getConfig = require('./config').get
@@ -109,23 +109,23 @@ async function validateBranches(branches, config) {
 
   // If target branch is not defined, use the default branch. This also ensures even if
   // base branch is defined, the default branch is not created as a child of the base branch
-  if (typeof config.targetBranchName == 'undefined') {
+  if (!config.targetBranchName) {
     core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
     config.targetBranchName = defaultBranch
-    config.baseBranchName = undefined
+    config.baseBranchName = null
   }
 
-  const baseBranchPresent = srmClient.checkIfBranchPresent(branches, config.baseBranchName)
-  const targetBranchPresent = srmClient.checkIfBranchPresent(branches, config.targetBranchName)
+  const baseBranchPresent = checkIfBranchPresent(branches, config.baseBranchName)
+  const targetBranchPresent = checkIfBranchPresent(branches, config.targetBranchName)
 
   if (targetBranchPresent) {
     core.info("Using existing SRM branch: " + config.targetBranchName);
     // Not necessary, base branch is currently ignored in the backend if the target
     // branch already exists. just setting to null to safeguard in case of future changes
-    config.baseBranchName = undefined
+    config.baseBranchName = null
   } else {
     // Base branch is not defined; throw error
-    if (typeof config.baseBranchName == 'undefined') {
+    if (!config.baseBranchName) {
       throw new Error("A parent branch must be specified when using a new target branch");
     }
 
@@ -144,7 +144,7 @@ module.exports = async function run() {
   const config = getConfig()
   const MinimumVersionForBranching = '2022.4.3'
 
-  const client = new srmClient.SrmApiClient(config.serverUrl, config.apiKey, config.caCert)
+  const client = new SrmApiClient(config.serverUrl, config.apiKey, config.caCert)
   core.info("Checking connection to SRM...")
 
   const srmVersion = await client.testConnection()
@@ -156,15 +156,15 @@ module.exports = async function run() {
 
   core.info("Validating branch selection...")
   // First check if the SRM version being used supports branching
-  if (srmVersion.localeCompare(MinimumVersionForBranching) < 0) {
+  if (srmVersion.localeCompare(MinimumVersionForBranching, undefined, { numeric: true }) < 0) {
     core.info(
         "The connected SRM server with version " + srmVersion + " does not support project branches. " +
         "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
         "branch options will be ignored."
     )
-    // Set both branch configs to undefined since we will be ignoring them
-    config.baseBranchName = undefined
-    config.targetBranchName = undefined
+    // Set both branch configs to null since we will be ignoring them
+    config.baseBranchName = null
+    config.targetBranchName = null
   } else {
     const branches = await client.getProjectBranches(config.projectId)
     await validateBranches(branches, config)
