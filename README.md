@@ -23,18 +23,23 @@ The workflow will be set to fail if:
 
 ## Action Inputs
 
-| Input Name                 | Description                                                                                              | Default Value | Required |
-|----------------------------|----------------------------------------------------------------------------------------------------------|---------------|----------|
-| `server-url`               | The URL for the SRM server (typically ends with `/codedx`)                                           |               | Yes      |
-| `api-key`                  | An API Key or Personal Access Token to use when connecting to SRM                                    |               | Yes      |
-| `project-id`               | The ID of a project (an integer) created in SRM                                                      |               | Yes      |
-| `base-branch-name`         | The parent branch name of a project created in SRM                                                   | `undefined`   | No       |
-| `target-branch-name`       | The target branch name of a project created in SRM                                                   | `undefined`   | No       |
-| `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to SRM | `undefined`   | No       |
-| `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                              | `undefined`   | No       |
-| `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                              | `false`       | No       |
-| `ca-cert`                  | A custom CA cert to use for HTTPS connections to SRM                                                 | `undefined`   | No       |
-| `dry-run`                  | Whether to submit an analysis (false/undefined) or only test the connection and credentials (true)       | `undefined`   | No       |
+| Input Name                 | Description                                                                                                                                                                                       | Default Value | Required        |
+|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|-----------------|
+| `server-url`               | The URL for the SRM server (typically ends with `/srm`)                                                                                                                                           |               | Yes             |
+| `api-key`                  | An API Key or Personal Access Token to use when connecting to SRM                                                                                                                                 |               | Yes             |
+| `project-id`               | The ID of a project (an integer) created in SRM                                                                                                                                                               | `undefined`   | Yes<sup>1</sup> |
+| `project-name`             | The name of a project created in SRM                                                                                                                                                              | `undefined`   | Yes<sup>1</sup> |
+| `base-branch-name`         | The parent branch name of a project created in SRM                                                                                                                                                | `undefined`   | No<sup>2</sup>  |
+| `target-branch-name`       | The target branch name of a project created in SRM. <br/>SRM automatically creates the branch if it does not exist yet in the project, and the new branch will be created from `base-branch-name` | `undefined`   | No              |
+| `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to SRM                                                                                              | `undefined`   | No              |
+| `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                                                                                                                       | `undefined`   | No              |
+| `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                                                                                                                       | `false`       | No              |
+| `ca-cert`                  | A custom CA cert to use for HTTPS connections to SRM                                                                                                                                              | `undefined`   | No              |
+| `dry-run`                  | Whether to submit an analysis (false/undefined) or only test the connection and credentials (true)                                                                                                | `undefined`   | No              |
+
+**Notes**
+1. Either `project-id` or `project-name` is required. An error will be thrown if neither is specified or both are specified.
+2. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project
 
 ## Sample Workflow
 

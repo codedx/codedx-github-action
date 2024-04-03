@@ -90,6 +90,11 @@ class SrmApiClient {
         return response.data.version
     }
 
+    async getSrmProjects() {
+        const projectsResponse = await this.http.get(`/x/projects`).catch(rethrowError)
+        return projectsResponse.data
+    }
+
     async validatePermissions(projectId) {
         const cleanNeededPermissions = [
             'analysis:create'
@@ -123,16 +128,13 @@ class SrmApiClient {
     }
 
     async runAnalysis(projectId, baseBranchName, targetBranchName, formData) {
-        const baseBranchPresent = !!baseBranchName
-        const targetBranchPresent = !!targetBranchName
+        // If base branch is defined, add the base branch name in the project URL part or just add the project id directly
+        const projectSpecifier = baseBranchName ? `${projectId};branch=${baseBranchName}` : projectId
 
-        // If base branch is not defined, OR, base branch is present but target branch isn't, add the base branch name in the project URL part
-        const projectUrlPart = ((!baseBranchName) || (baseBranchPresent && targetBranchPresent)) ? "" : `;branch=${baseBranchName}`
+        // If target branch is defined, add the branch name to the query param. Or else, keep it blank; it will work on the default branch
+        const queryParamsPart = targetBranchName ? `?branchName=${targetBranchName}` : ''
 
-        // If target branch is not defined, no need to add the branch name to the query param. It will work on the default branch
-        const queryParamsPart = (!targetBranchName) ? "analysis" : `analysis?branchName=${targetBranchName}`
-
-        const response = await this.http.post(`/api/projects/${projectId}${projectUrlPart}/${queryParamsPart}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
+        const response = await this.http.post(`/api/projects/${projectSpecifier}/analysis${queryParamsPart}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
         return response.data
     }
 

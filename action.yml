@@ -3,19 +3,22 @@ description: 'Analyze your source code and binaries with SRM'
 inputs:
   # main config options
   server-url:
-    description: 'the URL for the SRM server (typically ends with `/codedx`)'
+    description: 'the URL for the SRM server (typically ends with `/srm`)'
     required: true
   api-key:
     description: 'an API key or Personal Access Token (PAT) to use when connecting to SRM'
     required: true
   project-id:
-    description: 'the ID of a project (an integer) created in SRM'
-    required: true
+    description: 'the ID of a project (an integer) created in SRM. This is required if `project-name` is not specified.'
+    required: false
+  project-name:
+    description: 'the name of a project created in SRM. This is required if `project-id` is not specified.'
+    required: false
   base-branch-name:
     description: 'the parent branch name of a project created in SRM'
     required: false
   target-branch-name:
-    description: 'the target branch name of a project created in SRM'
+    description: 'the target branch name of a project created in SRM. SRM automatically creates the branch if it does not exist yet in the project, and the new branch will be created from `base-branch-name`'
     required: false
   source-and-binaries-glob:
     description: 'a file glob matching source and binary files (accepts multiple comma-separated globs). if not set, no source/binary files will be sent to SRM'

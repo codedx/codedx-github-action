@@ -105,16 +105,6 @@ async function attachScanFiles(scanGlobs, formData) {
 }
 
 async function validateBranches(branches, config) {
-  const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
-
-  // If target branch is not defined, use the default branch. This also ensures even if
-  // base branch is defined, the default branch is not created as a child of the base branch
-  if (!config.targetBranchName) {
-    core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
-    config.targetBranchName = defaultBranch
-    config.baseBranchName = null
-  }
-
   const baseBranchPresent = checkIfBranchPresent(branches, config.baseBranchName)
   const targetBranchPresent = checkIfBranchPresent(branches, config.targetBranchName)
 
@@ -139,6 +129,32 @@ async function validateBranches(branches, config) {
   }
 }
 
+async function getProjectId(config, client) {
+  // If projectId is defined and not name, simply return the id
+  if (config.projectId && !config.projectName) {
+    return config.projectId
+  } else if (!config.projectId && config.projectName) {
+    // If project name is defined, retrieve the corresponding project id first.
+    // If multiple projects with the same name exist, throw an error since it is ambiguous which project the user wants.
+    const projects = await client.getSrmProjects()
+    const matchedProjectIds = projects.filter(project => project.name == config.projectName).map(project => project.id)
+
+    if (matchedProjectIds.length == 1) {
+      return matchedProjectIds[0]
+    } else if (matchedProjectIds.length == 0) {
+      throw new Error(`No projects with the name '${config.projectName}'.`)
+    } else {
+      throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with the project id instead.`)
+    }
+  } else if (!config.projectId && !config.projectName) {
+    // If neither is defined, throw error
+    throw new Error(`No projects specified. Make sure to specify either 'projectId' or 'projectName'.`)
+  } else {
+    // If both are defined, throw error
+    throw new Error(`Both 'projectId' and 'projectName' are specified. Unable to determine which project to use. Make sure to specify either 'projectId' or 'projectName'.`)
+  }
+}
+
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   const config = getConfig()
@@ -150,25 +166,37 @@ module.exports = async function run() {
   const srmVersion = await client.testConnection()
   core.info("Confirmed - using SRM " + srmVersion)
 
+  const projectId = await getProjectId(config, client)
+
   core.info("Checking API key permissions...")
-  await client.validatePermissions(config.projectId)
+  await client.validatePermissions(projectId)
   core.info("Connection to SRM server is OK.")
 
-  core.info("Validating branch selection...")
-  // First check if the SRM version being used supports branching
-  if (srmVersion.localeCompare(MinimumVersionForBranching, undefined, { numeric: true }) < 0) {
-    core.info(
-        "The connected SRM server with version " + srmVersion + " does not support project branches. " +
-        "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
-        "branch options will be ignored."
-    )
-    // Set both branch configs to null since we will be ignoring them
-    config.baseBranchName = null
-    config.targetBranchName = null
+  const branches = await client.getProjectBranches(projectId)
+  if (config.targetBranchName) {
+    core.info("Validating branch selection...")
+    // First check if the SRM version being used supports branching
+    if (srmVersion.localeCompare(MinimumVersionForBranching, undefined, { numeric: true }) < 0) {
+      core.info(
+          "The connected SRM server with version " + srmVersion + " does not support project branches. " +
+          "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
+          "branch options will be ignored."
+      )
+      // Set both branch configs to null since we will be ignoring them
+      config.baseBranchName = null
+      config.targetBranchName = null
+    } else {
+      await validateBranches(branches, config)
+      core.info("Branch selection is OK.")
+    }
   } else {
-    const branches = await client.getProjectBranches(config.projectId)
-    await validateBranches(branches, config)
-    core.info("Branch selection is OK.")
+    // If target branch is not defined, use the default branch. This also ensures even if
+    // base branch is defined, the default branch is not created as a child of the base branch
+    const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
+
+    core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
+    config.targetBranchName = defaultBranch
+    config.baseBranchName = null
   }
 
   if (config.dryRun) {
@@ -193,7 +221,7 @@ module.exports = async function run() {
   }
 
   core.info("Uploading to SRM...")
-  const { analysisId, jobId } = await client.runAnalysis(config.projectId, config.baseBranchName, config.targetBranchName, formData)
+  const { analysisId, jobId } = await client.runAnalysis(projectId, config.baseBranchName, config.targetBranchName, formData)
 
   core.info("Started analysis #" + analysisId)
 
