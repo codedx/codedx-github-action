@@ -144,7 +144,7 @@ async function getProjectId(config, client) {
     } else if (matchedProjectIds.length == 0) {
       throw new Error(`No projects with the name '${config.projectName}'.`)
     } else {
-      throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with the project id instead.`)
+      throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with 'project-id' instead.`)
     }
   } else if (!config.projectId && !config.projectName) {
     // If neither is defined, throw error
