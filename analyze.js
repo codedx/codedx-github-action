@@ -148,10 +148,10 @@ async function getProjectId(config, client) {
     }
   } else if (!config.projectId && !config.projectName) {
     // If neither is defined, throw error
-    throw new Error(`No projects specified. Make sure to specify either 'projectId' or 'projectName'.`)
+    throw new Error(`No projects specified. Make sure to specify either 'project-id' or 'project-name'.`)
   } else {
     // If both are defined, throw error
-    throw new Error(`Both 'projectId' and 'projectName' are specified. Unable to determine which project to use. Make sure to specify either 'projectId' or 'projectName'.`)
+    throw new Error(`Both 'project-id' and 'project-name' are specified. Unable to determine which project to use. Make sure to specify either 'project-id' or 'project-name'.`)
   }
 }
 

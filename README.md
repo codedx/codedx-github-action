@@ -39,7 +39,7 @@ The workflow will be set to fail if:
 
 **Notes**
 1. Either `project-id` or `project-name` is required. An error will be thrown if neither is specified or both are specified.
-2. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project
+2. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project.
 
 ## Sample Workflow
 
