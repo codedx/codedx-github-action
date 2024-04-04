@@ -4,7 +4,7 @@ const _ = require('underscore')
 const archiver = require('archiver')
 const fs = require('fs')
 const FormData = require('form-data')
-const CodeDxApiClient = require('./codedx')
+const { SrmApiClient, checkIfBranchPresent } = require('./srm')
 const path = require('path')
 
 const getConfig = require('./config').get
@@ -74,7 +74,7 @@ async function prepareInputsZip(inputsGlob, targetFile) {
 }
 
 async function attachInputsZip(inputGlobs, formData, tmpDir) {
-  const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
+  const zipTarget = path.join(tmpDir, "srm-inputfiles.zip")
   const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
   if (numFiles == 0) {
     core.warning("No files were matched by the 'source-and-binaries-glob' values, skipping source/binaries ZIP attachment")
@@ -104,19 +104,100 @@ async function attachScanFiles(scanGlobs, formData) {
   }
 }
 
+async function validateBranches(branches, config) {
+  const baseBranchPresent = checkIfBranchPresent(branches, config.baseBranchName)
+  const targetBranchPresent = checkIfBranchPresent(branches, config.targetBranchName)
+
+  if (targetBranchPresent) {
+    core.info("Using existing SRM branch: " + config.targetBranchName);
+    // Not necessary, base branch is currently ignored in the backend if the target
+    // branch already exists. just setting to null to safeguard in case of future changes
+    config.baseBranchName = null
+  } else {
+    // Base branch is not defined; throw error
+    if (!config.baseBranchName) {
+      throw new Error("A parent branch must be specified when using a new target branch");
+    }
+
+    // Base branch is defined but is not present; cannot create target branch, so throw error
+    if (!baseBranchPresent) {
+      throw new Error("The specified parent branch does not exist: " + config.baseBranchName);
+    }
+
+    // If base branch is defined and present, create the target branch off the base
+    core.info(`Analysis will create a new branch named '${config.targetBranchName}' based on the branch '${config.baseBranchName}'`);
+  }
+}
+
+async function getProjectId(config, client) {
+  // If projectId is defined and not name, simply return the id
+  if (config.projectId && !config.projectName) {
+    return config.projectId
+  } else if (!config.projectId && config.projectName) {
+    // If project name is defined, retrieve the corresponding project id first.
+    // If multiple projects with the same name exist, throw an error since it is ambiguous which project the user wants.
+    const projects = await client.getSrmProjects()
+    const matchedProjectIds = projects.filter(project => project.name == config.projectName).map(project => project.id)
+
+    if (matchedProjectIds.length == 1) {
+      return matchedProjectIds[0]
+    } else if (matchedProjectIds.length == 0) {
+      throw new Error(`No projects with the name '${config.projectName}'.`)
+    } else {
+      throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with 'project-id' instead.`)
+    }
+  } else if (!config.projectId && !config.projectName) {
+    // If neither is defined, throw error
+    throw new Error(`No projects specified. Make sure to specify either 'project-id' or 'project-name'.`)
+  } else {
+    // If both are defined, throw error
+    throw new Error(`Both 'project-id' and 'project-name' are specified. Unable to determine which project to use. Make sure to specify either 'project-id' or 'project-name'.`)
+  }
+}
+
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   const config = getConfig()
+  const MinimumVersionForBranching = '2022.4.3'
 
-  const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
-  core.info("Checking connection to Code Dx...")
+  const client = new SrmApiClient(config.serverUrl, config.apiKey, config.caCert)
+  core.info("Checking connection to SRM...")
 
-  const codedxVersion = await client.testConnection()
-  core.info("Confirmed - using Code Dx " + codedxVersion)
+  const srmVersion = await client.testConnection()
+  core.info("Confirmed - using SRM " + srmVersion)
+
+  const projectId = await getProjectId(config, client)
 
   core.info("Checking API key permissions...")
-  await client.validatePermissions(config.projectId)
-  core.info("Connection to Code Dx server is OK.")
+  await client.validatePermissions(projectId)
+  core.info("Connection to SRM server is OK.")
+
+  const branches = await client.getProjectBranches(projectId)
+  if (config.targetBranchName) {
+    core.info("Validating branch selection...")
+    // First check if the SRM version being used supports branching
+    if (srmVersion.localeCompare(MinimumVersionForBranching, undefined, { numeric: true }) < 0) {
+      core.info(
+          "The connected SRM server with version " + srmVersion + " does not support project branches. " +
+          "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
+          "branch options will be ignored."
+      )
+      // Set both branch configs to null since we will be ignoring them
+      config.baseBranchName = null
+      config.targetBranchName = null
+    } else {
+      await validateBranches(branches, config)
+      core.info("Branch selection is OK.")
+    }
+  } else {
+    // If target branch is not defined, use the default branch. This also ensures even if
+    // base branch is defined, the default branch is not created as a child of the base branch
+    const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
+
+    core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
+    config.targetBranchName = defaultBranch
+    config.baseBranchName = null
+  }
 
   if (config.dryRun) {
     core.info("dry-run is enabled, exiting without analysis")
@@ -139,8 +220,8 @@ module.exports = async function run() {
     core.info("Scan files glob not specified, skipping scan file attachment")
   }
 
-  core.info("Uploading to Code Dx...")
-  const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
+  core.info("Uploading to SRM...")
+  const { analysisId, jobId } = await client.runAnalysis(projectId, config.baseBranchName, config.targetBranchName, formData)
 
   core.info("Started analysis #" + analysisId)
 
@@ -155,7 +236,7 @@ module.exports = async function run() {
     if (lastStatus == JobStatus.COMPLETED) {
       core.info("Analysis finished! Completed with status: " + lastStatus)
     } else {
-      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See Code Dx server logs/visual log for more details.`)
+      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See SRM server logs/visual log for more details.`)
     }
   }
 }

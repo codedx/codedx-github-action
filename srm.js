@@ -25,7 +25,14 @@ function rethrowError(err) {
     throw parseError(err)
 }
 
-class CodeDxApiClient {
+function checkIfBranchPresent(branches, branchName) {
+    for (const branch of branches) {
+        if (branch.name == branchName) return true
+    }
+    return false
+}
+
+class SrmApiClient {
     constructor(baseUrl, apiKey, caCert) {
         const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
 
@@ -47,7 +54,7 @@ class CodeDxApiClient {
         })
     }
 
-    // WARNING: This logging will emit Header data, which contains the Code Dx API key. This should not be exposed and should only
+    // WARNING: This logging will emit Header data, which contains the SRM API key. This should not be exposed and should only
     //          be used for internal testing.
     useLogging() {
         AxiosLogger.setGlobalConfig({
@@ -64,23 +71,28 @@ class CodeDxApiClient {
     async testConnection() {
         const response = await this.anonymousHttp.get('/x/system-info').catch(e => {
             if (axios.isAxiosError(e) && e.response) {
-                throw new Error(`Expected OK response, got ${e.response.status}. Is this a Code Dx instance?`)
+                throw new Error(`Expected OK response, got ${e.response.status}. Is this an SRM instance?`)
             } else {
                 throw e
             }
         })
 
         if (typeof response.data != 'object') {
-            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
+            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this an SRM instance?`)
         }
 
         const expectedFields = ['version', 'date']
         const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
         if (unexpectedFields.length > 0) {
-            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this a Code Dx instance?`)
+            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this an SRM instance?`)
         }
 
         return response.data.version
+    }
+
+    async getSrmProjects() {
+        const projectsResponse = await this.http.get(`/x/projects`).catch(rethrowError)
+        return projectsResponse.data
     }
 
     async validatePermissions(projectId) {
@@ -110,8 +122,19 @@ class CodeDxApiClient {
         }
     }
 
-    async runAnalysis(projectId, formData) {
-        const response = await this.http.post(`/api/projects/${projectId}/analysis`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
+    async getProjectBranches(projectId) {
+        const branchesResponse = await this.http.get(`/x/projects/${projectId}/branches`).catch(rethrowError)
+        return branchesResponse.data
+    }
+
+    async runAnalysis(projectId, baseBranchName, targetBranchName, formData) {
+        // If base branch is defined, add the base branch name in the project URL part or just add the project id directly
+        const projectSpecifier = baseBranchName ? `${projectId};branch=${baseBranchName}` : projectId
+
+        // If target branch is defined, add the branch name to the query param. Or else, keep it blank; it will work on the default branch
+        const queryParamsPart = targetBranchName ? `?branchName=${targetBranchName}` : ''
+
+        const response = await this.http.post(`/api/projects/${projectSpecifier}/analysis${queryParamsPart}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
         return response.data
     }
 
@@ -121,4 +144,7 @@ class CodeDxApiClient {
     }
 }
 
-module.exports = CodeDxApiClient
+module.exports = {
+    SrmApiClient,
+    checkIfBranchPresent
+}

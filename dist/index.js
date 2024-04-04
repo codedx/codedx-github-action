@@ -11,7 +11,7 @@ const _ = __nccwpck_require__(3571)
 const archiver = __nccwpck_require__(3084)
 const fs = __nccwpck_require__(5747)
 const FormData = __nccwpck_require__(4334)
-const CodeDxApiClient = __nccwpck_require__(7416)
+const { SrmApiClient, checkIfBranchPresent } = __nccwpck_require__(8663)
 const path = __nccwpck_require__(5622)
 
 const getConfig = __nccwpck_require__(5532).get
@@ -81,7 +81,7 @@ async function prepareInputsZip(inputsGlob, targetFile) {
 }
 
 async function attachInputsZip(inputGlobs, formData, tmpDir) {
-  const zipTarget = path.join(tmpDir, "codedx-inputfiles.zip")
+  const zipTarget = path.join(tmpDir, "srm-inputfiles.zip")
   const numFiles = await prepareInputsZip(inputGlobs, zipTarget)
   if (numFiles == 0) {
     core.warning("No files were matched by the 'source-and-binaries-glob' values, skipping source/binaries ZIP attachment")
@@ -111,19 +111,100 @@ async function attachScanFiles(scanGlobs, formData) {
   }
 }
 
+async function validateBranches(branches, config) {
+  const baseBranchPresent = checkIfBranchPresent(branches, config.baseBranchName)
+  const targetBranchPresent = checkIfBranchPresent(branches, config.targetBranchName)
+
+  if (targetBranchPresent) {
+    core.info("Using existing SRM branch: " + config.targetBranchName);
+    // Not necessary, base branch is currently ignored in the backend if the target
+    // branch already exists. just setting to null to safeguard in case of future changes
+    config.baseBranchName = null
+  } else {
+    // Base branch is not defined; throw error
+    if (!config.baseBranchName) {
+      throw new Error("A parent branch must be specified when using a new target branch");
+    }
+
+    // Base branch is defined but is not present; cannot create target branch, so throw error
+    if (!baseBranchPresent) {
+      throw new Error("The specified parent branch does not exist: " + config.baseBranchName);
+    }
+
+    // If base branch is defined and present, create the target branch off the base
+    core.info(`Analysis will create a new branch named '${config.targetBranchName}' based on the branch '${config.baseBranchName}'`);
+  }
+}
+
+async function getProjectId(config, client) {
+  // If projectId is defined and not name, simply return the id
+  if (config.projectId && !config.projectName) {
+    return config.projectId
+  } else if (!config.projectId && config.projectName) {
+    // If project name is defined, retrieve the corresponding project id first.
+    // If multiple projects with the same name exist, throw an error since it is ambiguous which project the user wants.
+    const projects = await client.getSrmProjects()
+    const matchedProjectIds = projects.filter(project => project.name == config.projectName).map(project => project.id)
+
+    if (matchedProjectIds.length == 1) {
+      return matchedProjectIds[0]
+    } else if (matchedProjectIds.length == 0) {
+      throw new Error(`No projects with the name '${config.projectName}'.`)
+    } else {
+      throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with 'project-id' instead.`)
+    }
+  } else if (!config.projectId && !config.projectName) {
+    // If neither is defined, throw error
+    throw new Error(`No projects specified. Make sure to specify either 'project-id' or 'project-name'.`)
+  } else {
+    // If both are defined, throw error
+    throw new Error(`Both 'project-id' and 'project-name' are specified. Unable to determine which project to use. Make sure to specify either 'project-id' or 'project-name'.`)
+  }
+}
+
 // most @actions toolkit packages have async methods
 module.exports = async function run() {
   const config = getConfig()
+  const MinimumVersionForBranching = '2022.4.3'
 
-  const client = new CodeDxApiClient(config.serverUrl, config.apiKey, config.caCert)
-  core.info("Checking connection to Code Dx...")
+  const client = new SrmApiClient(config.serverUrl, config.apiKey, config.caCert)
+  core.info("Checking connection to SRM...")
 
-  const codedxVersion = await client.testConnection()
-  core.info("Confirmed - using Code Dx " + codedxVersion)
+  const srmVersion = await client.testConnection()
+  core.info("Confirmed - using SRM " + srmVersion)
+
+  const projectId = await getProjectId(config, client)
 
   core.info("Checking API key permissions...")
-  await client.validatePermissions(config.projectId)
-  core.info("Connection to Code Dx server is OK.")
+  await client.validatePermissions(projectId)
+  core.info("Connection to SRM server is OK.")
+
+  const branches = await client.getProjectBranches(projectId)
+  if (config.targetBranchName) {
+    core.info("Validating branch selection...")
+    // First check if the SRM version being used supports branching
+    if (srmVersion.localeCompare(MinimumVersionForBranching, undefined, { numeric: true }) < 0) {
+      core.info(
+          "The connected SRM server with version " + srmVersion + " does not support project branches. " +
+          "The minimum required version is " + MinimumVersionForBranching + ". The target branch and base " +
+          "branch options will be ignored."
+      )
+      // Set both branch configs to null since we will be ignoring them
+      config.baseBranchName = null
+      config.targetBranchName = null
+    } else {
+      await validateBranches(branches, config)
+      core.info("Branch selection is OK.")
+    }
+  } else {
+    // If target branch is not defined, use the default branch. This also ensures even if
+    // base branch is defined, the default branch is not created as a child of the base branch
+    const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
+
+    core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
+    config.targetBranchName = defaultBranch
+    config.baseBranchName = null
+  }
 
   if (config.dryRun) {
     core.info("dry-run is enabled, exiting without analysis")
@@ -146,8 +227,8 @@ module.exports = async function run() {
     core.info("Scan files glob not specified, skipping scan file attachment")
   }
 
-  core.info("Uploading to Code Dx...")
-  const { analysisId, jobId } = await client.runAnalysis(config.projectId, formData)
+  core.info("Uploading to SRM...")
+  const { analysisId, jobId } = await client.runAnalysis(projectId, config.baseBranchName, config.targetBranchName, formData)
 
   core.info("Started analysis #" + analysisId)
 
@@ -162,140 +243,10 @@ module.exports = async function run() {
     if (lastStatus == JobStatus.COMPLETED) {
       core.info("Analysis finished! Completed with status: " + lastStatus)
     } else {
-      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See Code Dx server logs/visual log for more details.`)
+      throw new Error(`Analysis finished with non-complete status: ${lastStatus}. See SRM server logs/visual log for more details.`)
     }
   }
 }
-
-/***/ }),
-
-/***/ 7416:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const axios = __nccwpck_require__(6545).default
-const _ = __nccwpck_require__(3571)
-const AxiosLogger = __nccwpck_require__(7370)
-const https = __nccwpck_require__(7211)
-
-function parseError(e) {
-    if (axios.isAxiosError(e) && e.response) {
-        let msg = `${e.response.statusText} (HTTP ${e.response.status})`
-
-        if (e.response.data) {
-            if (e.response.data.error) {
-                msg += `: ${e.response.data.error}`
-            } else {
-                msg += `: received response ${JSON.stringify(e.response.data)}`
-            }
-        }
-
-        return new Error(msg)
-    } else {
-        return e
-    }
-}
-
-function rethrowError(err) {
-    throw parseError(err)
-}
-
-class CodeDxApiClient {
-    constructor(baseUrl, apiKey, caCert) {
-        const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
-
-        const baseConfig = {
-            baseURL: baseUrl,
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-
-            httpsAgent
-        }
-
-        this.anonymousHttp = axios.create(baseConfig)
-
-        this.http = axios.create({
-            ...baseConfig,
-            headers: {
-                'API-Key': apiKey
-            }
-        })
-    }
-
-    // WARNING: This logging will emit Header data, which contains the Code Dx API key. This should not be exposed and should only
-    //          be used for internal testing.
-    useLogging() {
-        AxiosLogger.setGlobalConfig({
-            headers: true
-        })
-
-        this.anonymousHttp.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
-        this.http.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
-
-        this.anonymousHttp.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
-        this.http.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
-    }
-
-    async testConnection() {
-        const response = await this.anonymousHttp.get('/x/system-info').catch(e => {
-            if (axios.isAxiosError(e) && e.response) {
-                throw new Error(`Expected OK response, got ${e.response.status}. Is this a Code Dx instance?`)
-            } else {
-                throw e
-            }
-        })
-
-        if (typeof response.data != 'object') {
-            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this a Code Dx instance?`)
-        }
-
-        const expectedFields = ['version', 'date']
-        const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
-        if (unexpectedFields.length > 0) {
-            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this a Code Dx instance?`)
-        }
-
-        return response.data.version
-    }
-
-    async validatePermissions(projectId) {
-        const cleanNeededPermissions = [
-            'analysis:create'
-        ]
-
-        const neededPermissions = cleanNeededPermissions.map(p => `${p}:${projectId}`)
-
-        const response = await this.http.post('/x/check-permissions', neededPermissions).catch(e => {
-            if (axios.isAxiosError(e) && e.response.status == 403) {
-                throw new Error("Permissions check responded with HTTP 403, is the API key valid?")
-            } else {
-                throw parseError(e)
-            }
-        })
-        
-        const permissions = response.data
-        const missingPermissions = neededPermissions.filter(p => !permissions[p])
-        if (missingPermissions.length > 0) {
-            const cleanMissingPermissions = missingPermissions.map(p => {
-                const parts = p.split(':')
-                return parts.slice(0, -1).join(':')
-            })
-            const summary = cleanMissingPermissions.join(', ')
-            throw new Error("The following permissions were missing for the given API Key: " + summary)
-        }
-    }
-
-    async runAnalysis(projectId, formData) {
-        const response = await this.http.post(`/api/projects/${projectId}/analysis`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
-        return response.data
-    }
-
-    async checkJobStatus(jobId) {
-        const response = await this.http.get('/api/jobs/' + jobId).catch(rethrowError)
-        return response.data.status
-    }
-}
-
-module.exports = CodeDxApiClient
 
 /***/ }),
 
@@ -320,7 +271,10 @@ class Config {
     constructor() {
         this.serverUrl = core.getInput('server-url', { required: true })
         this.apiKey = core.getInput('api-key', { required: true })
-        this.projectId = core.getInput('project-id', { required: true })
+        this.projectId = core.getInput('project-id')
+        this.projectName = core.getInput('project-name')
+        this.baseBranchName = core.getInput('base-branch-name')
+        this.targetBranchName = core.getInput('target-branch-name')
         this.inputGlobs = core.getInput('source-and-binaries-glob')
         this.scanGlobs = core.getInput('tool-outputs-glob')
 
@@ -346,6 +300,8 @@ class Config {
                 throw new Error("Invalid value for projectId, expected a number but got a " + (typeof this.projectId))
             }
         }
+
+        this.projectName = this.projectName.trim()
     }
 }
 
@@ -37983,6 +37939,162 @@ ZipStream.prototype.finalize = function() {
 
 /***/ }),
 
+/***/ 8663:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const axios = __nccwpck_require__(6545).default
+const _ = __nccwpck_require__(3571)
+const AxiosLogger = __nccwpck_require__(7370)
+const https = __nccwpck_require__(7211)
+
+function parseError(e) {
+    if (axios.isAxiosError(e) && e.response) {
+        let msg = `${e.response.statusText} (HTTP ${e.response.status})`
+
+        if (e.response.data) {
+            if (e.response.data.error) {
+                msg += `: ${e.response.data.error}`
+            } else {
+                msg += `: received response ${JSON.stringify(e.response.data)}`
+            }
+        }
+
+        return new Error(msg)
+    } else {
+        return e
+    }
+}
+
+function rethrowError(err) {
+    throw parseError(err)
+}
+
+function checkIfBranchPresent(branches, branchName) {
+    for (const branch of branches) {
+        if (branch.name == branchName) return true
+    }
+    return false
+}
+
+class SrmApiClient {
+    constructor(baseUrl, apiKey, caCert) {
+        const httpsAgent = caCert ? new https.Agent({ ca: caCert }) : undefined
+
+        const baseConfig = {
+            baseURL: baseUrl,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+
+            httpsAgent
+        }
+
+        this.anonymousHttp = axios.create(baseConfig)
+
+        this.http = axios.create({
+            ...baseConfig,
+            headers: {
+                'API-Key': apiKey
+            }
+        })
+    }
+
+    // WARNING: This logging will emit Header data, which contains the SRM API key. This should not be exposed and should only
+    //          be used for internal testing.
+    useLogging() {
+        AxiosLogger.setGlobalConfig({
+            headers: true
+        })
+
+        this.anonymousHttp.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
+        this.http.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
+
+        this.anonymousHttp.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
+        this.http.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
+    }
+
+    async testConnection() {
+        const response = await this.anonymousHttp.get('/x/system-info').catch(e => {
+            if (axios.isAxiosError(e) && e.response) {
+                throw new Error(`Expected OK response, got ${e.response.status}. Is this an SRM instance?`)
+            } else {
+                throw e
+            }
+        })
+
+        if (typeof response.data != 'object') {
+            throw new Error(`Expected JSON Object response, got ${typeof response.data}. Is this an SRM instance?`)
+        }
+
+        const expectedFields = ['version', 'date']
+        const unexpectedFields = _.without(_.keys(response.data), ...expectedFields)
+        if (unexpectedFields.length > 0) {
+            throw new Error(`Received unexpected fields ${unexpectedFields.join(', ')}. Is this an SRM instance?`)
+        }
+
+        return response.data.version
+    }
+
+    async getSrmProjects() {
+        const projectsResponse = await this.http.get(`/x/projects`).catch(rethrowError)
+        return projectsResponse.data
+    }
+
+    async validatePermissions(projectId) {
+        const cleanNeededPermissions = [
+            'analysis:create'
+        ]
+
+        const neededPermissions = cleanNeededPermissions.map(p => `${p}:${projectId}`)
+
+        const response = await this.http.post('/x/check-permissions', neededPermissions).catch(e => {
+            if (axios.isAxiosError(e) && e.response.status == 403) {
+                throw new Error("Permissions check responded with HTTP 403, is the API key valid?")
+            } else {
+                throw parseError(e)
+            }
+        })
+        
+        const permissions = response.data
+        const missingPermissions = neededPermissions.filter(p => !permissions[p])
+        if (missingPermissions.length > 0) {
+            const cleanMissingPermissions = missingPermissions.map(p => {
+                const parts = p.split(':')
+                return parts.slice(0, -1).join(':')
+            })
+            const summary = cleanMissingPermissions.join(', ')
+            throw new Error("The following permissions were missing for the given API Key: " + summary)
+        }
+    }
+
+    async getProjectBranches(projectId) {
+        const branchesResponse = await this.http.get(`/x/projects/${projectId}/branches`).catch(rethrowError)
+        return branchesResponse.data
+    }
+
+    async runAnalysis(projectId, baseBranchName, targetBranchName, formData) {
+        // If base branch is defined, add the base branch name in the project URL part or just add the project id directly
+        const projectSpecifier = baseBranchName ? `${projectId};branch=${baseBranchName}` : projectId
+
+        // If target branch is defined, add the branch name to the query param. Or else, keep it blank; it will work on the default branch
+        const queryParamsPart = targetBranchName ? `?branchName=${targetBranchName}` : ''
+
+        const response = await this.http.post(`/api/projects/${projectSpecifier}/analysis${queryParamsPart}`, formData, { headers: formData.getHeaders() }).catch(rethrowError)
+        return response.data
+    }
+
+    async checkJobStatus(jobId) {
+        const response = await this.http.get('/api/jobs/' + jobId).catch(rethrowError)
+        return response.data.status
+    }
+}
+
+module.exports = {
+    SrmApiClient,
+    checkIfBranchPresent
+}
+
+/***/ }),
+
 /***/ 1641:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -40170,7 +40282,7 @@ module.exports = underscoreNodeF._;
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse("{\"_from\":\"axios\",\"_id\":\"axios@0.21.4\",\"_inBundle\":false,\"_integrity\":\"sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==\",\"_location\":\"/axios\",\"_phantomChildren\":{},\"_requested\":{\"type\":\"tag\",\"registry\":true,\"raw\":\"axios\",\"name\":\"axios\",\"escapedName\":\"axios\",\"rawSpec\":\"\",\"saveSpec\":null,\"fetchSpec\":\"latest\"},\"_requiredBy\":[\"#USER\",\"/\"],\"_resolved\":\"https://registry.npmjs.org/axios/-/axios-0.21.4.tgz\",\"_shasum\":\"c67b90dc0568e5c1cf2b0b858c43ba28e2eda575\",\"_spec\":\"axios\",\"_where\":\"/Users/tylerc/repos/codedx-github-action/analyze\",\"author\":{\"name\":\"Matt Zabriskie\"},\"browser\":{\"./lib/adapters/http.js\":\"./lib/adapters/xhr.js\"},\"bugs\":{\"url\":\"https://github.com/axios/axios/issues\"},\"bundleDependencies\":false,\"bundlesize\":[{\"path\":\"./dist/axios.min.js\",\"threshold\":\"5kB\"}],\"dependencies\":{\"follow-redirects\":\"^1.14.0\"},\"deprecated\":false,\"description\":\"Promise based HTTP client for the browser and node.js\",\"devDependencies\":{\"coveralls\":\"^3.0.0\",\"es6-promise\":\"^4.2.4\",\"grunt\":\"^1.3.0\",\"grunt-banner\":\"^0.6.0\",\"grunt-cli\":\"^1.2.0\",\"grunt-contrib-clean\":\"^1.1.0\",\"grunt-contrib-watch\":\"^1.0.0\",\"grunt-eslint\":\"^23.0.0\",\"grunt-karma\":\"^4.0.0\",\"grunt-mocha-test\":\"^0.13.3\",\"grunt-ts\":\"^6.0.0-beta.19\",\"grunt-webpack\":\"^4.0.2\",\"istanbul-instrumenter-loader\":\"^1.0.0\",\"jasmine-core\":\"^2.4.1\",\"karma\":\"^6.3.2\",\"karma-chrome-launcher\":\"^3.1.0\",\"karma-firefox-launcher\":\"^2.1.0\",\"karma-jasmine\":\"^1.1.1\",\"karma-jasmine-ajax\":\"^0.1.13\",\"karma-safari-launcher\":\"^1.0.0\",\"karma-sauce-launcher\":\"^4.3.6\",\"karma-sinon\":\"^1.0.5\",\"karma-sourcemap-loader\":\"^0.3.8\",\"karma-webpack\":\"^4.0.2\",\"load-grunt-tasks\":\"^3.5.2\",\"minimist\":\"^1.2.0\",\"mocha\":\"^8.2.1\",\"sinon\":\"^4.5.0\",\"terser-webpack-plugin\":\"^4.2.3\",\"typescript\":\"^4.0.5\",\"url-search-params\":\"^0.10.0\",\"webpack\":\"^4.44.2\",\"webpack-dev-server\":\"^3.11.0\"},\"homepage\":\"https://axios-http.com\",\"jsdelivr\":\"dist/axios.min.js\",\"keywords\":[\"xhr\",\"http\",\"ajax\",\"promise\",\"node\"],\"license\":\"MIT\",\"main\":\"index.js\",\"name\":\"axios\",\"repository\":{\"type\":\"git\",\"url\":\"git+https://github.com/axios/axios.git\"},\"scripts\":{\"build\":\"NODE_ENV=production grunt build\",\"coveralls\":\"cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js\",\"examples\":\"node ./examples/server.js\",\"fix\":\"eslint --fix lib/**/*.js\",\"postversion\":\"git push && git push --tags\",\"preversion\":\"npm test\",\"start\":\"node ./sandbox/server.js\",\"test\":\"grunt test\",\"version\":\"npm run build && grunt version && git add -A dist && git add CHANGELOG.md bower.json package.json\"},\"typings\":\"./index.d.ts\",\"unpkg\":\"dist/axios.min.js\",\"version\":\"0.21.4\"}");
+module.exports = JSON.parse("{\"_args\":[[\"axios@0.21.4\",\"/Users/baibhab/repos/3/codedx-github-action\"]],\"_from\":\"axios@0.21.4\",\"_id\":\"axios@0.21.4\",\"_inBundle\":false,\"_integrity\":\"sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==\",\"_location\":\"/axios\",\"_phantomChildren\":{},\"_requested\":{\"type\":\"version\",\"registry\":true,\"raw\":\"axios@0.21.4\",\"name\":\"axios\",\"escapedName\":\"axios\",\"rawSpec\":\"0.21.4\",\"saveSpec\":null,\"fetchSpec\":\"0.21.4\"},\"_requiredBy\":[\"/\"],\"_resolved\":\"https://registry.npmjs.org/axios/-/axios-0.21.4.tgz\",\"_spec\":\"0.21.4\",\"_where\":\"/Users/baibhab/repos/3/codedx-github-action\",\"author\":{\"name\":\"Matt Zabriskie\"},\"browser\":{\"./lib/adapters/http.js\":\"./lib/adapters/xhr.js\"},\"bugs\":{\"url\":\"https://github.com/axios/axios/issues\"},\"bundlesize\":[{\"path\":\"./dist/axios.min.js\",\"threshold\":\"5kB\"}],\"dependencies\":{\"follow-redirects\":\"^1.14.0\"},\"description\":\"Promise based HTTP client for the browser and node.js\",\"devDependencies\":{\"coveralls\":\"^3.0.0\",\"es6-promise\":\"^4.2.4\",\"grunt\":\"^1.3.0\",\"grunt-banner\":\"^0.6.0\",\"grunt-cli\":\"^1.2.0\",\"grunt-contrib-clean\":\"^1.1.0\",\"grunt-contrib-watch\":\"^1.0.0\",\"grunt-eslint\":\"^23.0.0\",\"grunt-karma\":\"^4.0.0\",\"grunt-mocha-test\":\"^0.13.3\",\"grunt-ts\":\"^6.0.0-beta.19\",\"grunt-webpack\":\"^4.0.2\",\"istanbul-instrumenter-loader\":\"^1.0.0\",\"jasmine-core\":\"^2.4.1\",\"karma\":\"^6.3.2\",\"karma-chrome-launcher\":\"^3.1.0\",\"karma-firefox-launcher\":\"^2.1.0\",\"karma-jasmine\":\"^1.1.1\",\"karma-jasmine-ajax\":\"^0.1.13\",\"karma-safari-launcher\":\"^1.0.0\",\"karma-sauce-launcher\":\"^4.3.6\",\"karma-sinon\":\"^1.0.5\",\"karma-sourcemap-loader\":\"^0.3.8\",\"karma-webpack\":\"^4.0.2\",\"load-grunt-tasks\":\"^3.5.2\",\"minimist\":\"^1.2.0\",\"mocha\":\"^8.2.1\",\"sinon\":\"^4.5.0\",\"terser-webpack-plugin\":\"^4.2.3\",\"typescript\":\"^4.0.5\",\"url-search-params\":\"^0.10.0\",\"webpack\":\"^4.44.2\",\"webpack-dev-server\":\"^3.11.0\"},\"homepage\":\"https://axios-http.com\",\"jsdelivr\":\"dist/axios.min.js\",\"keywords\":[\"xhr\",\"http\",\"ajax\",\"promise\",\"node\"],\"license\":\"MIT\",\"main\":\"index.js\",\"name\":\"axios\",\"repository\":{\"type\":\"git\",\"url\":\"git+https://github.com/axios/axios.git\"},\"scripts\":{\"build\":\"NODE_ENV=production grunt build\",\"coveralls\":\"cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js\",\"examples\":\"node ./examples/server.js\",\"fix\":\"eslint --fix lib/**/*.js\",\"postversion\":\"git push && git push --tags\",\"preversion\":\"npm test\",\"start\":\"node ./sandbox/server.js\",\"test\":\"grunt test\",\"version\":\"npm run build && grunt version && git add -A dist && git add CHANGELOG.md bower.json package.json\"},\"typings\":\"./index.d.ts\",\"unpkg\":\"dist/axios.min.js\",\"version\":\"0.21.4\"}");
 
 /***/ }),
 

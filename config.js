@@ -16,7 +16,10 @@ class Config {
     constructor() {
         this.serverUrl = core.getInput('server-url', { required: true })
         this.apiKey = core.getInput('api-key', { required: true })
-        this.projectId = core.getInput('project-id', { required: true })
+        this.projectId = core.getInput('project-id')
+        this.projectName = core.getInput('project-name')
+        this.baseBranchName = core.getInput('base-branch-name')
+        this.targetBranchName = core.getInput('target-branch-name')
         this.inputGlobs = core.getInput('source-and-binaries-glob')
         this.scanGlobs = core.getInput('tool-outputs-glob')
 
@@ -42,6 +45,8 @@ class Config {
                 throw new Error("Invalid value for projectId, expected a number but got a " + (typeof this.projectId))
             }
         }
+
+        this.projectName = this.projectName.trim()
     }
 }
 
