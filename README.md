@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: SRM Upload
-        uses: 'codedx/codedx-github-action@v1.1'
+        uses: 'codedx/codedx-github-action@v1.2'
         with:
           server-url: ${{ secrets.CDX_SERVER_URL }}
           api-key: ${{ secrets.CDX_API_KEY }}
