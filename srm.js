@@ -95,6 +95,12 @@ class SrmApiClient {
         return projectsResponse.data
     }
 
+    async createSrmProject(projectName, targetBranchName) {
+        const requestBody = "{\"name\": " + projectName + "\", \"defaultBranchName\": \"" + targetBranchName + "\"}"
+        const projectsResponse = await this.http.post(`/api/projects`, requestBody).catch(rethrowError)
+        return projectsResponse.data
+    }
+
     async validatePermissions(projectId) {
         const cleanNeededPermissions = [
             'analysis:create'

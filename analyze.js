@@ -44,6 +44,9 @@ function makeRelative(workingDir, path) {
   }
 }
 
+const branches = await client.getProjectBranches(projectId)
+const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
+
 async function prepareInputsZip(inputsGlob, targetFile) {
   const separatedInputGlobs = commaSeparated(inputsGlob);
   core.debug("Got input file globs: " + separatedInputGlobs)
@@ -142,7 +145,9 @@ async function getProjectId(config, client) {
     if (matchedProjectIds.length == 1) {
       return matchedProjectIds[0]
     } else if (matchedProjectIds.length == 0) {
-      throw new Error(`No projects with the name '${config.projectName}'.`)
+      let targetBranch = config.targetBranchName ? config.targetBranchName : defaultBranch
+      core.info(`No projects with the name '${config.projectName}'. Creating the project with branch ${targetBranch}.`)
+      return client.createSrmProject(config.projectName, targetBranch)
     } else {
       throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with 'project-id' instead.`)
     }
@@ -172,7 +177,6 @@ module.exports = async function run() {
   await client.validatePermissions(projectId)
   core.info("Connection to SRM server is OK.")
 
-  const branches = await client.getProjectBranches(projectId)
   if (config.targetBranchName) {
     core.info("Validating branch selection...")
     // First check if the SRM version being used supports branching
@@ -192,8 +196,6 @@ module.exports = async function run() {
   } else {
     // If target branch is not defined, use the default branch. This also ensures even if
     // base branch is defined, the default branch is not created as a child of the base branch
-    const defaultBranch = branches.filter(branch => branch.isDefault)[0].name
-
     core.info(`No target branch was defined. Using default target branch '${defaultBranch}'`)
     config.targetBranchName = defaultBranch
     config.baseBranchName = null
