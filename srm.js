@@ -96,7 +96,7 @@ class SrmApiClient {
     }
 
     async createSrmProject(projectName, targetBranchName) {
-        const requestBody = "{\"name\": " + projectName + "\", \"defaultBranchName\": \"" + targetBranchName + "\"}"
+        const requestBody = JSON.parse(`{"name": "${projectName}", "defaultBranchName": ${targetBranchName}}`)
         const projectsResponse = await this.http.post(`/api/projects`, requestBody).catch(rethrowError)
         return projectsResponse.data
     }
