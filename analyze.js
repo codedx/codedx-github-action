@@ -142,11 +142,9 @@ async function getProjectId(config, client) {
     if (matchedProjectIds.length == 1) {
       return matchedProjectIds[0]
     } else if (matchedProjectIds.length == 0) {
-      let targetBranch = config.targetBranchName ? `\"${config.targetBranchName}\"` : null
-      let targetBranchMessagePart = targetBranch == null ? "default" : targetBranch
-      core.info(`No projects with the name '${config.projectName}'. Creating the project on ${targetBranchMessagePart} branch.`)
-      const createdProject = await client.createSrmProject(config.projectName, targetBranch)
-      core.info(`Created project ${createdProject.name} (projectId = ${createdProject.id})`)
+      core.info(`No projects found with the name '${config.projectName}'. Creating the project...`)
+      const createdProject = await client.createSrmProject(config)
+      core.info(`Created project '${createdProject.name}' (projectId = ${createdProject.id})`)
       return createdProject.id
     } else {
       throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with 'project-id' instead.`)

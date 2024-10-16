@@ -95,8 +95,25 @@ class SrmApiClient {
         return projectsResponse.data
     }
 
-    async createSrmProject(projectName, targetBranchName) {
-        const requestBody = JSON.parse(`{"name": "${projectName}", "defaultBranchName": ${targetBranchName}}`)
+    async getDefaultProjectBranchQueryParam(config) {
+        // If neither branches are specified, no need to add the query param
+        if (!config.baseBranchName && !config.targetBranchName)
+            return ``
+        // If both branches are specified, use the base branch as the default project branch. The target branch will
+        // later be used for analysis
+        else if (config.baseBranchName && config.targetBranchName)
+            return `"defaultBranchName": "${config.baseBranchName}"`
+        // For any other case, throw new project creation error
+        else throw Error(`New project creation failed because branch config is specified but incomplete. ` +
+            `Make sure to specify both 'base-branch-name' and 'target-branch-name', or neither, for project creation.`)
+    }
+
+    async createSrmProject(config) {
+        const requestBodyParams = [
+            `"name": "${config.projectName}"`,
+            await this.getDefaultProjectBranchQueryParam(config)
+        ]
+        const requestBody = JSON.parse(`{${requestBodyParams.filter(str => str).join()}}`)
         const projectsResponse = await this.http.post(`/api/projects`, requestBody).catch(rethrowError)
         return projectsResponse.data
     }
