@@ -1,6 +1,6 @@
 # GitHub Action for SRM
 
-This GitHub action can be used to push source code, binaries, and scan results to an [SRM](https://www.synopsys.com/software-integrity/software-risk-manager.html) instance from within a GitHub workflow; source and binaries are automatically scanned by SRM using its built-in analysis tools.
+This GitHub action can be used to push source code, binaries, and scan results to an [SRM](https://www.blackduck.com/software-risk-manager.html) instance from within a GitHub workflow; source and binaries are automatically scanned by SRM using its built-in analysis tools.
 
 ## Features and Behavior
 
@@ -39,7 +39,10 @@ The workflow will be set to fail if:
 
 **Notes**
 1. Either `project-id` or `project-name` is required. An error will be thrown if neither is specified or both are specified.
-2. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project.
+2. If `project-name` is specified, and it does not exist, it will be created. The `base-branch-name` will be used as default branch, and `target-branch-name` will be used as analysis branch. 
+   If neither is specified, it will simply use the default branch.
+   If only one of the branches is specified, it will throw error during project creation.
+3. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project.
 
 ## Sample Workflow
 

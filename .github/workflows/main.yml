@@ -12,24 +12,24 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: actions/checkout@v2
         with:
           path: 'codedx-action'
-          
+
       - uses: actions/checkout@v2
         with:
           repository: 'WebGoat/WebGoat'
           path: 'webgoat'
-          
+
       - run: |
           wget -q https://github.com/pmd/pmd/releases/download/pmd_releases%2F6.38.0/pmd-bin-6.38.0.zip
           unzip pmd-bin-6.38.0.zip
           ./pmd-bin-6.38.0/bin/run.sh pmd -d webgoat -f sarif -R rulesets/java/quickstart.xml -r pmd-sarif.json -failOnViolation false
-      
+
       - name: SRM Upload
         uses: './codedx-action'
         with:
@@ -39,3 +39,4 @@ jobs:
           source-and-binaries-glob: 'webgoat/**'
           tool-outputs-glob: 'pmd-sarif.json'
           wait-for-completion: false
+          ca-cert: ${{ secrets.CDX_CERT }}
