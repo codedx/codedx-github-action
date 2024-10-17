@@ -1,6 +1,6 @@
 # GitHub Action for SRM
 
-This GitHub action can be used to push source code, binaries, and scan results to an [SRM](https://www.synopsys.com/software-integrity/software-risk-manager.html) instance from within a GitHub workflow; source and binaries are automatically scanned by SRM using its built-in analysis tools.
+This GitHub action can be used to push source code, binaries, and scan results to an [SRM](https://www.blackduck.com/software-risk-manager.html) instance from within a GitHub workflow; source and binaries are automatically scanned by SRM using its built-in analysis tools.
 
 ## Features and Behavior
 
@@ -23,23 +23,28 @@ The workflow will be set to fail if:
 
 ## Action Inputs
 
-| Input Name                 | Description                                                                                                                                                                                       | Default Value | Required        |
-|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|-----------------|
-| `server-url`               | The URL for the SRM server (typically ends with `/srm`)                                                                                                                                           |               | Yes             |
-| `api-key`                  | An API Key or Personal Access Token to use when connecting to SRM                                                                                                                                 |               | Yes             |
-| `project-id`               | The ID of a project (an integer) created in SRM                                                                                                                                                               | `undefined`   | Yes<sup>1</sup> |
-| `project-name`             | The name of a project created in SRM                                                                                                                                                              | `undefined`   | Yes<sup>1</sup> |
-| `base-branch-name`         | The parent branch name of a project created in SRM                                                                                                                                                | `undefined`   | No<sup>2</sup>  |
-| `target-branch-name`       | The target branch name of a project created in SRM. <br/>SRM automatically creates the branch if it does not exist yet in the project, and the new branch will be created from `base-branch-name` | `undefined`   | No              |
-| `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to SRM                                                                                              | `undefined`   | No              |
-| `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                                                                                                                       | `undefined`   | No              |
-| `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                                                                                                                       | `false`       | No              |
-| `ca-cert`                  | A custom CA cert to use for HTTPS connections to SRM                                                                                                                                              | `undefined`   | No              |
-| `dry-run`                  | Whether to submit an analysis (false/undefined) or only test the connection and credentials (true)                                                                                                | `undefined`   | No              |
+| Input Name                 | Description                                                                                                                                                                                       | Default Value | Required                       |
+|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|--------------------------------|
+| `server-url`               | The URL for the SRM server (typically ends with `/srm`)                                                                                                                                           |               | Yes                            |
+| `api-key`                  | An API Key or Personal Access Token to use when connecting to SRM                                                                                                                                 |               | Yes                            |
+| `project-id`               | The ID of a project (an integer) created in SRM                                                                                                                                                   | `undefined`   | Yes<sup>[1]</sup>              |
+| `project-name`             | The name of a project created in SRM                                                                                                                                                              | `undefined`   | Yes<sup>[1]</sup>              |
+| `auto-create-project`      | Whether SRM should automatically create a project with the given `project-name` if it does not yet exist.                                                                                         | `false`       | No<sup>[2]</sup>               |
+| `base-branch-name`         | The parent branch name of a project created in SRM                                                                                                                                                | `undefined`   | No<sup>[2]</sup><sup>[3]</sup> |
+| `target-branch-name`       | The target branch name of a project created in SRM. <br/>SRM automatically creates the branch if it does not exist yet in the project, and the new branch will be created from `base-branch-name` | `undefined`   | No<sup>[2]</sup>               |
+| `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to SRM                                                                                              | `undefined`   | No                             |
+| `tool-outputs-glob`        | A comma-separated list of file globs matching tool output/scan result files                                                                                                                       | `undefined`   | No                             |
+| `wait-for-completion`      | Whether to wait for the analysis to complete before exiting                                                                                                                                       | `false`       | No                             |
+| `ca-cert`                  | A custom CA cert to use for HTTPS connections to SRM                                                                                                                                              | `undefined`   | No                             |
+| `dry-run`                  | Whether to submit an analysis (false/undefined) or only test the connection and credentials (true)                                                                                                | `undefined`   | No                             |
 
 **Notes**
 1. Either `project-id` or `project-name` is required. An error will be thrown if neither is specified or both are specified.
-2. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project.
+2. If `auto-create-project` is set to true, SRM will automatically create the project if it does not yet exist.
+   The `base-branch-name` will be used as the default branch, and `target-branch-name` will be used as the analysis branch.
+   If neither is specified, it will simply use the default branch.
+   If only one of the branches is specified, it will throw error during project creation.
+3. `base-branch-name` is required if `target-branch-name` is specified and doesn't exist yet in the project.
 
 ## Sample Workflow
 

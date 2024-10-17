@@ -19,17 +19,17 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: 'codedx-action'
-          
+
       - uses: actions/checkout@v2
         with:
           repository: 'WebGoat/WebGoat'
           path: 'webgoat'
-          
+
       - run: |
           wget -q https://github.com/pmd/pmd/releases/download/pmd_releases%2F6.38.0/pmd-bin-6.38.0.zip
           unzip pmd-bin-6.38.0.zip
           ./pmd-bin-6.38.0/bin/run.sh pmd -d webgoat -f sarif -R rulesets/java/quickstart.xml -r pmd-sarif.json -failOnViolation false
-      
+
       - name: SRM Upload
         uses: './codedx-action'
         with:

@@ -95,6 +95,19 @@ class SrmApiClient {
         return projectsResponse.data
     }
 
+    async createSrmProject(config) {
+        const requestBodyData = { "name": config.projectName }
+        if (config.baseBranchName && config.targetBranchName)
+            requestBodyData.defaultBranchName = config.baseBranchName
+        else if (!!config.baseBranchName != !!config.targetBranchName)
+            throw Error(`New project creation failed because branch config is specified but incomplete. ` +
+                `Make sure to specify both 'base-branch-name' and 'target-branch-name', or neither, for project creation.`
+            )
+
+        const projectsResponse = await this.http.post(`/api/projects`, requestBodyData).catch(rethrowError)
+        return projectsResponse.data
+    }
+
     async validatePermissions(projectId) {
         const cleanNeededPermissions = [
             'analysis:create'
