@@ -18,6 +18,7 @@ class Config {
         this.apiKey = core.getInput('api-key', { required: true })
         this.projectId = core.getInput('project-id')
         this.projectName = core.getInput('project-name')
+        this.autoCreateProject = core.getInput('auto-create-project')
         this.baseBranchName = core.getInput('base-branch-name')
         this.targetBranchName = core.getInput('target-branch-name')
         this.inputGlobs = core.getInput('source-and-binaries-glob')
@@ -32,9 +33,9 @@ class Config {
     }
 
     sanitize() {
+        fixBoolean(this, 'autoCreateProject')
         fixBoolean(this, 'waitForCompletion')
         fixBoolean(this, 'dryRun')
-        fixBoolean(this, 'requireInputFiles')
 
         this.inputGlobs = this.inputGlobs.trim()
 
