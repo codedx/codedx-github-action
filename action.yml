@@ -15,7 +15,7 @@ inputs:
     description: 'the name of a project created in SRM. This is required if `project-id` is not specified.'
     required: false
   auto-create-project:
-    description: 'whether or not SRM should automatically create a specified project name if it does not exist.'
+    description: 'whether SRM should automatically create a project with the given `project-name` if it does not yet exist.'
     required: false
     default: false
   base-branch-name:

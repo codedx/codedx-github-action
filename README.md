@@ -29,7 +29,7 @@ The workflow will be set to fail if:
 | `api-key`                  | An API Key or Personal Access Token to use when connecting to SRM                                                                                                                                 |               | Yes                            |
 | `project-id`               | The ID of a project (an integer) created in SRM                                                                                                                                                   | `undefined`   | Yes<sup>[1]</sup>              |
 | `project-name`             | The name of a project created in SRM                                                                                                                                                              | `undefined`   | Yes<sup>[1]</sup>              |
-| `auto-create-project`      | Whether or not SRM should automatically create a specified project name if it does not exist                                                                                                      | `false`       | No<sup>[2]</sup>               |
+| `auto-create-project`      | Whether SRM should automatically create a project with the given `project-name` if it does not yet exist.                                                                                         | `false`       | No<sup>[2]</sup>               |
 | `base-branch-name`         | The parent branch name of a project created in SRM                                                                                                                                                | `undefined`   | No<sup>[2]</sup><sup>[3]</sup> |
 | `target-branch-name`       | The target branch name of a project created in SRM. <br/>SRM automatically creates the branch if it does not exist yet in the project, and the new branch will be created from `base-branch-name` | `undefined`   | No<sup>[2]</sup>               |
 | `source-and-binaries-glob` | A comma-separated-list of file globs matching source and binary files to be packaged and sent to SRM                                                                                              | `undefined`   | No                             |
@@ -40,7 +40,7 @@ The workflow will be set to fail if:
 
 **Notes**
 1. Either `project-id` or `project-name` is required. An error will be thrown if neither is specified or both are specified.
-2. If `auto-create-project` is set to true, SRM will automatically create a project that does not exist.
+2. If `auto-create-project` is set to true, SRM will automatically create the project if it does not yet exist.
    The `base-branch-name` will be used as the default branch, and `target-branch-name` will be used as the analysis branch.
    If neither is specified, it will simply use the default branch.
    If only one of the branches is specified, it will throw error during project creation.

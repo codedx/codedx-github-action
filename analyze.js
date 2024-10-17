@@ -144,13 +144,13 @@ async function getProjectId(config, client) {
     } else if (matchedProjectIds.length == 0) {
       if (config.autoCreateProject) {
         core.info(`Found 'auto-create-project: true'`)
-        core.info(`No projects with the name '${config.projectName}'. Creating the project...`)
+        core.info(`No project found with the name '${config.projectName}'. Creating the project...`)
         const createdProject = await client.createSrmProject(config)
         core.info(`Created project '${createdProject.name}' (projectId = ${createdProject.id})`)
         return createdProject.id
       } else {
         core.info(`Found 'auto-create-project: false'`)
-        throw new Error(`No projects with the name '${config.projectName}'. Note: If you want SRM to auto-create a project that does not exist, set 'auto-create-project: true' in your workflow file.`)
+        throw new Error(`No project found with the name '${config.projectName}'. (Note: To auto-create missing projects, set 'auto-create-project' to 'true'.)`)
       }
     } else {
       throw new Error(`Multiple projects with the name '${config.projectName}'. Unable to determine which project to use. Try specifying with 'project-id' instead.`)
